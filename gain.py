@@ -48,6 +48,7 @@ def gain (data_x, gain_parameters):
   Returns:
     - imputed_data: imputed data
   '''
+
   # Define mask matrix
   data_m = 1-np.isnan(data_x)
   
@@ -67,11 +68,11 @@ def gain (data_x, gain_parameters):
   norm_data, norm_parameters = normalization(data_x)
   norm_data_x = np.nan_to_num(norm_data, 0)
   
-  ## GAIN architecture   
+  ## GAIN architecture
   # Input placeholders
   # Data vector
   X = tf.placeholder(tf.float32, shape = [None, dim])
-  # Mask vector 
+  # Mask vector
   M = tf.placeholder(tf.float32, shape = [None, dim])
   # Hint vector
   H = tf.placeholder(tf.float32, shape = [None, dim])
@@ -81,12 +82,12 @@ def gain (data_x, gain_parameters):
   D_b1 = tf.Variable(tf.zeros(shape = [h_dim]))
   
   D_W2 = tf.Variable(xavier_init([h_dim, h_dim]))
-  D_b2 = tf.Variable(tf.zeros(shape = [h_dim]))
+  D_b2 = tf.Variable(tf.zeros(shape = [                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    h_dim]))
   
   D_W3 = tf.Variable(xavier_init([h_dim, dim]))
   D_b3 = tf.Variable(tf.zeros(shape = [dim]))  # Multi-variate outputs
   
-  theta_D = [D_W1, D_W2, D_W3, D_b1, D_b2, D_b3]
+  theta_D = [D_W1, D_W2, D_W3, D_b1, D_b2, D_b3] 
   
   #Generator variables
   # Data + Mask as inputs (Random noise is in missing components)
@@ -127,7 +128,7 @@ def gain (data_x, gain_parameters):
   G_sample = generator(X, M)
  
   # Combine with observed data
-  Hat_X = X * M + G_sample * (1-M)
+  Hat_X = X * M + G_sample * (1-M)   
   
   # Discriminator
   D_prob = discriminator(Hat_X, H)
@@ -140,7 +141,7 @@ def gain (data_x, gain_parameters):
   
   MSE_loss = \
   tf.reduce_mean((M * X - M * G_sample)**2) / tf.reduce_mean(M)
-  
+
   D_loss = D_loss_temp
   G_loss = G_loss_temp + alpha * MSE_loss 
   
@@ -151,43 +152,63 @@ def gain (data_x, gain_parameters):
   ## Iterations
   sess = tf.Session()
   sess.run(tf.global_variables_initializer())
-   
+  loss_list = []
+  print(" ################# TRAINING STARTS #####################")
   # Start Iterations
   for it in tqdm(range(iterations)):    
-      
+
+   # print(" --------------------iteration:", it, "--------------------------")
+    
     # Sample batch
     batch_idx = sample_batch_index(no, batch_size)
-    X_mb = norm_data_x[batch_idx, :]  
-    M_mb = data_m[batch_idx, :]  
-    # Sample random vectors  
-    Z_mb = uniform_sampler(0, 0.01, batch_size, dim) 
+    X_mb = norm_data_x[batch_idx, :]
+    M_mb = data_m[batch_idx, :]
+
+    # Sample random vectors
+    Z_mb = uniform_sampler(0, 0.01, batch_size, dim)
+
     # Sample hint vectors
     H_mb_temp = binary_sampler(hint_rate, batch_size, dim)
+
+    # print("H_mb_temp value :", H_mb_temp.dtype)
     H_mb = M_mb * H_mb_temp
-      
+    
     # Combine random vectors with observed vectors
     X_mb = M_mb * X_mb + (1-M_mb) * Z_mb 
       
     _, D_loss_curr = sess.run([D_solver, D_loss_temp], 
                               feed_dict = {M: M_mb, X: X_mb, H: H_mb})
+
+    
+    # print("X is:") 
+    tf.print(X)
+    # print("M is:", M)
+    # print ("G Sample is :", G_sample)  
+
     _, G_loss_curr, MSE_loss_curr = \
     sess.run([G_solver, G_loss_temp, MSE_loss],
-             feed_dict = {X: X_mb, M: M_mb, H: H_mb})
-            
+              feed_dict = {X: X_mb, M: M_mb, H: H_mb})
+
+    # print("MSE loss at iteration", it, ":", MSE_loss)
+    # print("MSE loss current at iteration", it, ":", MSE_loss_curr)
+
+    loss_list.append((D_loss_curr, MSE_loss_curr))
+
   ## Return imputed data      
-  Z_mb = uniform_sampler(0, 0.01, no, dim) 
+  Z_mb = uniform_sampler(0, 0.01, no, dim)
   M_mb = data_m
-  X_mb = norm_data_x          
-  X_mb = M_mb * X_mb + (1-M_mb) * Z_mb 
-      
+  X_mb = norm_data_x
+  X_mb = M_mb * X_mb + (1-M_mb) * Z_mb
+
   imputed_data = sess.run([G_sample], feed_dict = {X: X_mb, M: M_mb})[0]
   
   imputed_data = data_m * norm_data_x + (1-data_m) * imputed_data
   
   # Renormalization
-  imputed_data = renormalization(imputed_data, norm_parameters)  
+  imputed_data = renormalization(imputed_data, norm_parameters)
   
   # Rounding
-  imputed_data = rounding(imputed_data, data_x)  
+  imputed_data = rounding(imputed_data, data_x)
           
-  return imputed_data
+
+  return imputed_data, loss_list

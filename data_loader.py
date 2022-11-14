@@ -19,7 +19,7 @@
 import numpy as np
 from utils import binary_sampler
 from keras.datasets import mnist
-
+from load_adult import load_adult
 
 def data_loader (data_name, miss_rate):
   '''Loads datasets and introduce missingness.
@@ -33,21 +33,46 @@ def data_loader (data_name, miss_rate):
     miss_data_x: data with missing values
     data_m: indicator matrix for missing components
   '''
-  
+
   # Load data
+
   if data_name in ['letter', 'spam']:
     file_name = 'data/'+data_name+'.csv'
     data_x = np.loadtxt(file_name, delimiter=",", skiprows=1)
-  elif data_name == 'mnist':
+
+  elif data_name == 'mnist': 
     (data_x, _), _ = mnist.load_data()
     data_x = np.reshape(np.asarray(data_x), [60000, 28*28]).astype(float)
+
+  elif data_name == 'adult': 
+    smaller = False
+    scalar = True
+    
+    a,b = load_adult(smaller, scalar, miss_rate)  # currently drop_p is not used, used below instead
+    file_name = 'data/'+data_name+'.csv'
+    with open(file_name,'r+') as file:
+      file.truncate(0)
+    # print("a.values :", a.values)
+    a.to_csv(file_name, index=False)
+    
+    data_x = np.loadtxt(file_name, delimiter=",", skiprows = 1)
+    
+  elif data_name == 'Compas':
+    pass
 
   # Parameters
   no, dim = data_x.shape
   
-  # Introduce missing data
+  # Introduce missing data MCAR
   data_m = binary_sampler(1-miss_rate, no, dim)
+
   miss_data_x = data_x.copy()
   miss_data_x[data_m == 0] = np.nan
-      
-  return data_x, miss_data_x, data_m
+
+  print("Original data is :", data_x)
+  print("Data with missing entries:", miss_data_x)
+  print("Mask matrix:", data_m)
+
+  return data_x, miss_data_x, data_m   # Original, MCAR X, mask 
+
+

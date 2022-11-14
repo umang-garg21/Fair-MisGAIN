@@ -34,31 +34,32 @@ tf.disable_v2_behavior()
 
 def normalization (data, parameters=None):
   '''Normalize data in [0, 1] range.
-  
+
   Args:
     - data: original data
   
-  Returns:
+  Returns
     - norm_data: normalized data
     - norm_parameters: min_val, max_val for each feature for renormalization
   '''
 
   # Parameters
+  print("data.shape:", data.shape)
   _, dim = data.shape
   norm_data = data.copy()
   
   if parameters is None:
-  
+
     # MixMax normalization
     min_val = np.zeros(dim)
     max_val = np.zeros(dim)
-    
+  
     # For each dimension
     for i in range(dim):
       min_val[i] = np.nanmin(norm_data[:,i])
       norm_data[:,i] = norm_data[:,i] - np.nanmin(norm_data[:,i])
       max_val[i] = np.nanmax(norm_data[:,i])
-      norm_data[:,i] = norm_data[:,i] / (np.nanmax(norm_data[:,i]) + 1e-6)   
+      norm_data[:,i] = norm_data[:,i] / (np.nanmax(norm_data[:,i]) + 1e-6)  #in case nanmax returns nan or 0, add 1e-6
       
     # Return norm_parameters for renormalization
     norm_parameters = {'min_val': min_val,
@@ -138,10 +139,12 @@ def rmse_loss (ori_data, imputed_data, data_m):
   '''
   
   ori_data, norm_parameters = normalization(ori_data)
-  imputed_data, _ = normalization(imputed_data, norm_parameters)
-    
+  imputed_data, _ = normalization(imputed_data, norm_parameters)  # norm parameters reused: how does it guarantee bounds of 0-1
+  
+  # print(ori_data, imputed_data)
   # Only for missing values
-  nominator = np.sum(((1-data_m) * ori_data - (1-data_m) * imputed_data)**2)
+
+  nominator = np.sum(((1-data_m) * ori_data - (1-data_m) * imputed_data)**2)  #1-data_m is 1 only when data_m is 0: imputed data
   denominator = np.sum(1-data_m)
   
   rmse = np.sqrt(nominator/float(denominator))
@@ -207,6 +210,4 @@ def sample_batch_index(total, batch_size):
   total_idx = np.random.permutation(total)
   batch_idx = total_idx[:batch_size]
   return batch_idx
-  
-
   

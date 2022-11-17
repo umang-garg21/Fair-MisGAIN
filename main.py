@@ -44,9 +44,13 @@ def main (args):
     - alpha: hyperparameter
     - iterations: iterations
     - deep_analysis: True or False for Model validity
+    - imputer type: select imputer 
+    - drop_f: option to drop features
+    - runs: number of runs
+
   Returns:
-    - imputed_data_x: imputed data
-    - rmse: Root Mean Squared Error
+    - imputed_data_x_lst: imputed data list for all runs
+    - rmse_lst: Root Mean Squared Error list for all runs
   '''
   
   data_name = args.data_name

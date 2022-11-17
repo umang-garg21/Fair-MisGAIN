@@ -24,10 +24,6 @@ discriminator model such as multi-layer perceptrons or CNNs.
   - drop_f: option to drop features
   - runs: number of runs
 
-  Returns:
-  - imputed_data_x_lst: imputed data list for all runs
-  - rmse_lst: RMSE data list for all runs
-
 ### Example command
 
 ```shell
@@ -36,5 +32,5 @@ python main.py --data_name adult  --miss_rate 0.1 --batch_size 128 --hint_rate 1
 
 ### Outputs
 
--   imputed_data_x: imputed data
--   rmse: Root Mean Squared Error
+-   imputed_data_x_lst: imputed data list
+-   rmse_lst: Root Mean Squared Error list

@@ -44,13 +44,13 @@ def normalization (data, parameters=None):
   '''
 
   # Parameters
-  print("data.shape:", data.shape)
+  # print("data.shape:", data.shape)
   _, dim = data.shape
   norm_data = data.copy()
   
   if parameters is None:
 
-    # MixMax normalization
+    # MinMax normalization
     min_val = np.zeros(dim)
     max_val = np.zeros(dim)
   
@@ -103,7 +103,7 @@ def renormalization (norm_data, norm_parameters):
   return renorm_data
 
 
-def rounding (imputed_data, data_x):
+def rounding (imputed_data, data_x, categorical_features =[]):
   '''Round imputed data for categorical variables.
   
   Args:
@@ -116,13 +116,19 @@ def rounding (imputed_data, data_x):
   
   _, dim = data_x.shape
   rounded_data = imputed_data.copy()
-  
+
+  """
   for i in range(dim):
     temp = data_x[~np.isnan(data_x[:, i]), i]
-    # Only for the categorical variable
+    # Only for the categorical variable: a makeshift way to identify categorical entries
     if len(np.unique(temp)) < 20:
       rounded_data[:, i] = np.round(rounded_data[:, i])
-      
+  """
+
+  for f in categorical_features:
+      rounded_data[:, f] = np.round(rounded_data[:, f])
+
+
   return rounded_data
 
 
@@ -146,10 +152,18 @@ def rmse_loss (ori_data, imputed_data, data_m):
 
   nominator = np.sum(((1-data_m) * ori_data - (1-data_m) * imputed_data)**2)  #1-data_m is 1 only when data_m is 0: imputed data
   denominator = np.sum(1-data_m)
-  
   rmse = np.sqrt(nominator/float(denominator))
-  
-  return rmse
+
+  # Calculate RMSE per feature
+  _, dim = ori_data.shape
+
+  rmse_per_feature = []
+  for i in range(dim):    
+    nominator = np.sum(((1-data_m[:, i]) * ori_data[:, i] - (1-data_m[:, i]) * imputed_data[:, i])**2)  #1-data_m is 1 only when data_m is 0: imputed data
+    denominator = np.sum(1-data_m[:, i])
+    rmse_per_feature.append(np.sqrt(nominator/float(denominator)))
+
+  return rmse, rmse_per_feature
 
 
 def xavier_init(size):

@@ -40,7 +40,7 @@ def load_adult(smaller=False, scaler=True, drop_p = 0.1):
         pwd+'adult.data',
         names=[
             "age", "workclass", "fnlwgt", "education", "education-num", "marital-status",
-            "occupation", "relationship", "race", "gender", "capital-gain", "capital-loss",
+            "occupation", "relationship", "race", "sex", "capital-gain", "capital-loss",
             "hours-per-week", "native-country", "income"]
             )
     len_train = len(data.values[:, -1])
@@ -51,7 +51,7 @@ def load_adult(smaller=False, scaler=True, drop_p = 0.1):
         pwd+'adult.test',
         names=[
             "age", "workclass", "fnlwgt", "education", "education-num", "marital-status",
-            "occupation", "relationship", "race", "gender", "capital-gain", "capital-loss",
+            "occupation", "relationship", "race", "sex", "capital-gain", "capital-loss",
             "hours-per-week", "native-country", "income"]
     )
     data = pd.concat([data, data_test])
@@ -71,27 +71,29 @@ def load_adult(smaller=False, scaler=True, drop_p = 0.1):
     len_train = len(data.values[:, -1])
     # print("len_train after augmentation", len_train)
 
+    data, data_test = data.drop(columns=['fnlwgt']), data_test.drop(columns=['fnlwgt'])
+
     # Here we apply discretisation on column marital_status
-    data.replace(['Divorced', 'Married-AF-spouse',
-                  'Married-civ-spouse', 'Married-spouse-absent',
-                  'Never-married', 'Separated', 'Widowed'],
-                 ['not married', 'married', 'married', 'married',
-                  'not married', 'not married', 'not married'], inplace=True)
+    #    data.replace(['Divorced', 'Married-AF-spouse',
+    #              'Married-civ-spouse', 'Married-spouse-absent',
+    #              'Never-married', 'Separated', 'Widowed'],
+    #             ['not married', 'married', 'married', 'married',
+    #              'not married', 'not married', 'not married'], inplace=True)
+    
     # categorical fields
     category_col = ['workclass', 'race', 'education', 'marital-status', 'occupation',
-                    'relationship', 'gender', 'native-country', 'income']
+                    'relationship', 'sex', 'native-country', 'income']
 
-    for col in category_col:
+    for f_num, col in enumerate(list(data.columns.values)):
+        if col in category_col:
         # print("Column datatype:", data[col].dtypes)
         # print("Column is :", col)
         # print("Column data is: ", data[col])
         # x = data[col].unique()
         # print("x:", x)
-        b, c = np.unique(data[col], return_inverse=True)
-        data[col] = c
+            b, c = np.unique(data[col], return_inverse=True)
+            data[col] = c
 
-    data, data_test = data.drop(columns=['fnlwgt']), data_test.drop(columns=['fnlwgt'])
-    
     """ For introducing missing values
     
     ix = [(row, col) for row in range(data.shape[0]) for col in range(data.shape[1])]

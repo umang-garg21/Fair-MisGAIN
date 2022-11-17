@@ -1,4 +1,4 @@
-# Codebase for "Generative Adversarial Imputation Networks (GAIN)"
+# Fair "Generative Adversarial Imputation Networks (GAIN)"
 
 Authors: Umang Garg
 

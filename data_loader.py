@@ -66,7 +66,8 @@ def data_loader (data_name, miss_rate, drop_f_lst):
     df_obj = pd.read_csv(train_file)
 
     #Removing columns for imputation: check with and without #
-    df_obj = df_obj.drop(df_obj.columns[drop_f_lst], axis=1)
+    if drop_f_lst:
+      df_obj = df_obj.drop(df_obj.columns[drop_f_lst], axis=1)
 
     # Constructing categorical columns for the remaining data #
     # categorical fields

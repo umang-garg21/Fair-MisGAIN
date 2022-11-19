@@ -204,7 +204,7 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     MSE_loss_cat = -tf.reduce_mean(M_cat * X_cat * tf.log(M_cat * Gsample_cat + 1e-8)) / tf.reduce_mean(M_cat)
 
     MSE_loss = 0
-    use_categorical_data = True
+    use_categorical_data = False
     use_cont_data = True
     if use_cont_data:
       MSE_loss = MSE_loss + MSE_loss_cont

@@ -31,7 +31,6 @@ import numpy as np
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
-
 def normalization (data, parameters=None):
   '''Normalize data in [0, 1] range.
 
@@ -74,7 +73,7 @@ def normalization (data, parameters=None):
       norm_data[:,i] = norm_data[:,i] - min_val[i]
       norm_data[:,i] = norm_data[:,i] / (max_val[i] + 1e-6)  
       
-    norm_parameters = parameters    
+    norm_parameters = parameters
       
   return norm_data, norm_parameters
 
@@ -128,11 +127,11 @@ def rounding (imputed_data, data_x, categorical_features =[]):
   for f in categorical_features:
       rounded_data[:, f] = np.round(rounded_data[:, f])
 
-
   return rounded_data
 
 
 def rmse_loss (ori_data, imputed_data, data_m):
+  
   '''Compute RMSE loss between ori_data and imputed_data
   
   Args:
@@ -143,16 +142,18 @@ def rmse_loss (ori_data, imputed_data, data_m):
   Returns:
     - rmse: Root Mean Squared Error
   '''
-  
+  # Normalize to same base min and max values to get correct MSE, RMSE
   ori_data, norm_parameters = normalization(ori_data)
-  imputed_data, _ = normalization(imputed_data, norm_parameters)  # norm parameters reused: how does it guarantee bounds of 0-1
+  imputed_data, _ = normalization(imputed_data, norm_parameters)
   
   # print(ori_data, imputed_data)
   # Only for missing values
 
+  MSE_1 = np.square(np.subtract(imputed_data[data_m==0], ori_data[data_m==0])).mean()
+  rmse = np.sqrt(MSE_1)
   nominator = np.sum(((1-data_m) * ori_data - (1-data_m) * imputed_data)**2)  #1-data_m is 1 only when data_m is 0: imputed data
   denominator = np.sum(1-data_m)
-  rmse = np.sqrt(nominator/float(denominator))
+  # rmse = np.sqrt(nominator/float(denominator))
 
   # Calculate RMSE per feature
   _, dim = ori_data.shape

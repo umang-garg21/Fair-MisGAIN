@@ -31,7 +31,7 @@ from sklearn.metrics import mean_squared_error
 
 from data_loader import data_loader
 from gain import gain
-from utils import rmse_loss
+from utils import rmse_loss, normalization, renormalization
 
 def main (args):
   '''Main function for UCI letter and spam datasets.
@@ -76,93 +76,135 @@ def main (args):
   
   imputed_data_x_lst =[]
   rmse_lst =[]
+  rmse_per_feature_lst =[]
   rmse_it_lst = []
   rmse_per_feature_it_lst = []
+  
+  ylst = [[] for i in range(runs)]
 
   for r in range(runs):
     loss_list = []
     """
     Different imputer selection: Simple Imputer, KNN, GAIN
     """
-    # Impute missing data
-
+    # Impute missing data 
     if imputer_type == 'Simple':
       imputer = SimpleImputer(strategy='constant')
       imputed_data_x = imputer.fit_transform(miss_data_x)
-      rmse = mean_squared_error(imputed_data_x[data_m==0], ori_data_x[data_m==0], squared = False)
-      print("Rmse :", rmse)
-
+      deep_analysis = False
+      
+      """
+      ori_data_x, norm_parameters = normalization(ori_data_x)
+      imputed_data_x, _ = normalization(imputed_data_x, norm_parameters)
+      rmse_org = mean_squared_error(ori_data_x[data_m==0], imputed_data_x[data_m ==0], squared =False) 
+      # rmse_1 = np.sqrt(np.square(np.subtract(np.array([1, 0, 1]),np.array([1, 0, 0]))).mean())
+      # print("RMSE_1", rmse_1)
+      print("RMSE original: ", rmse_org)
+      """
+      
     elif imputer_type == 'KNN':
       imputer= KNNImputer()
       imputed_data_x = imputer.fit_transform(miss_data_x)
-      rmse = mean_squared_error(imputed_data_x[data_m==0], ori_data_x[data_m==0], squared = False)
-      print("Rmse :", rmse)
+      deep_analysis = False
+      """
+      ori_data_x, norm_parameters = normalization(ori_data_x)
+      imputed_data_x, _ = normalization(imputed_data_x, norm_parameters)
+      rmse_org = mean_squared_error(ori_data_x[data_m==0], imputed_data_x[data_m ==0], squared =False) 
+      # rmse_1 = np.sqrt(np.square(np.subtract(np.array([1, 0, 1]),np.array([1, 0, 0]))).mean())
+      # print("RMSE_1", rmse_1)
+      print("RMSE original: ", rmse_org)
+      """
 
     elif imputer_type =='Gain':
       if deep_analysis:
         print(" ----------------- In-depth Analysis mode -------------------")
         imputed_data_x, loss_list, rmse_it, rmse_per_feature_it = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, deep_analysis)
       else:
-        print(" ----------------- In-depth ANALYSIS SKIPPED ---------------------")
+        print(" ----------------- In-depth analysis skipped ---------------------")
         imputed_data_x, loss_list = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, deep_analysis)
-
+    
       # print("Loss list", loss_list)s
       y = loss_list
+      ylst[r] = loss_list
       y1, y2, y3, y4, y5 = [], [], [], [], []
-    
-      for it in range(len(loss_list)):
-        y1.append(y[it][0])  # D_loss
-        y2.append(y[it][1])  # MSE_loss_cont
-        y3.append(y[it][2])  # MSE_loss_Cat 
-        y4.append(y[it][3])  # MSE_loss_total  
-        y5.append(y[it][4])  # G_loss
+          
+      if runs == 1:
+        for it in range(len(loss_list)):
+          y1.append(y[it][0])  # D_loss
+          y2.append(y[it][1])  # MSE_loss_cont
+          y3.append(y[it][2])  # MSE_loss_Cat 
+          y4.append(y[it][3])  # MSE_loss_total  
+          y5.append(y[it][4])  # G_loss
 
-      x = np.arange(len(loss_list))
-      p1 = plt.plot(x, y1, label = 'D_loss'+'_'+str(r))
-      p2 = plt.plot(x, y2, label = 'MSE_loss_cont'+'_'+str(r))
-      p3 = plt.plot(x, y3, label = 'MSE_loss_cat'+'_'+str(r))
-      p4 = plt.plot(x, np.sqrt(y4), label =  'Root MSE loss of generator for existing data'+'_'+str(r))
-      p5 = plt.plot(x, y5, label = 'G_loss'+'_'+str(r))
-      if deep_analysis:
-        p6 = plt.plot(x, rmse_it, label = 'RMSE Evolution'+'_'+str(r))
-      plt.legend()
-      plt.show()
+        x = np.arange(len(loss_list))
+        fig1 = plt.figure()
+        p1 = plt.plot(x, y1, label = 'D_loss'+'_'+str(r))
+        p2 = plt.plot(x, y2, label = 'MSE_loss_cont'+'_'+str(r))
+        p3 = plt.plot(x, y3, label = 'MSE_loss_cat'+'_'+str(r))
+        p4 = plt.plot(x, np.sqrt(y4), label =  'Root MSE loss of generator for existing data'+'_'+str(r))
+        p5 = plt.plot(x, y5, label = 'G_loss'+'_'+str(r))
+        if deep_analysis:
+          p6 = plt.plot(x, rmse_it, label = 'RMSE Evolution'+'_'+str(r))
+        plt.legend()
+        plt.show()
       
       if deep_analysis:
         if not labels:
           for i in range(dim):
-            labels.append(i)
-        fig2 = plt.figure()
-        x = np.arange(len(rmse_it))
-        plt.plot(x, rmse_per_feature_it, label = labels)
-        plt.legend()
-        plt.show()
-    
-      # Finally Report the RMSE performance
-      rmse, rmse_per_feature = rmse_loss(ori_data_x, imputed_data_x, data_m)
+            labels.append(i)    
+        if runs == 1:
+          fig2 = plt.figure()
+          x = np.arange(len(rmse_it))
+          plt.plot(x, rmse_per_feature_it, label = labels)
+          plt.legend()
+          plt.show()
       
-      print('imputed_data_x: ', imputed_data_x)
-      print('Original data:', ori_data_x)
-      print('RMSE Performace: ' + str(np.round(rmse, 4)))
-      print('RMSE per feature:' + str(np.round(rmse_per_feature, 4)))
-      
-      fig = plt.figure()
-      # creating the bar plot
-      if labels:
-        x = labels 
-      else:
-        x = np.arange(len(rmse_per_feature)) 
-      plt.bar(x, rmse_per_feature, label='run'+str(r))
-      plt.xlabel("Feature")
-      plt.ylabel("RMSE")
-      plt.title("RMSE per feature")
-      plt.legend()
-      plt.show()
+    # Finally Report the RMSE performance
+    rmse, rmse_per_feature = rmse_loss(ori_data_x, imputed_data_x, data_m)
+    rmse_lst.append(rmse)
+    rmse_per_feature_lst.append(rmse_per_feature)
+    # print('imputed_data_x: ', imputed_data_x)
+    # print('Original data:', ori_data_x)
+    print('RMSE Performace_' +'run_'+str(r)+ ": " +str(np.round(rmse, 4)))
+    print('RMSE per feature_' +'run_'+str(r)+ str(np.round(rmse_per_feature, 4)))
 
     imputed_data_x_lst.append(imputed_data_x)
     rmse_lst.append(rmse)
+    if deep_analysis:
+      rmse_it_lst.append(rmse_it)
+      rmse_per_feature_it_lst.append(rmse_per_feature_it)
 
-  return imputed_data_x_lst, rmse_lst
+  # creating the bar plot for RMSE per feature plot for all runs
+  x = np.arange(len(rmse_per_feature))
+  if runs == 1:
+    fig3= plt.figure()
+    ax = plt.gca()
+    plt.bar(x, rmse_per_feature, label='run'+str(r))
+  else:
+    fig3, ax = plt.subplots()
+    xmin, xmax, ymin, ymax = ax.axis()
+    width = ((xmax-xmin)/ len(rmse_per_feature))/runs *10
+    for r in range(runs):
+      ax.bar(x - width/2 +r*width, rmse_per_feature_lst[r], width, label='run'+str(r))
+  ax.set_xlabel("Feature")
+  ax.set_ylabel("RMSE")
+  ax.set_xticks(x)
+  ax.set_xticklabels(labels) 
+  plt.title(imputer_type+" imputer: RMSE per feature ")
+  fig3.tight_layout()
+  plt.show()
+
+  # Plot RMSE for all runs
+  if runs==1:
+    pass
+  else:
+    fig4 = plt.figure()
+    plt.plot(np.arange(len(rmse_lst)), rmse_lst)
+    plt.title(imputer_type+" imputer: RMSE")
+    plt.legend()
+    plt.show()
+    
+  return imputed_data_x_lst, rmse_lst, rmse_it_lst, rmse_per_feature_it_lst, ylst
 
 if __name__ == '__main__':  
   
@@ -212,8 +254,9 @@ if __name__ == '__main__':
       type=int)
   parser.add_argument(
       '-drop_f','--drop_f',
-      help= 'features to be dropped',
+      help= 'features to be dropped..Categorical/ Continuous data can be toggled for gain in gain.py',
       nargs='*',
+      default = None,
       type = int)
   parser.add_argument(
       '-runs', '--runs',
@@ -225,4 +268,4 @@ if __name__ == '__main__':
   
   print(args)
   # Calls main function  
-  imputed_data_lst, rmse_lst = main(args)
+  imputed_data_lst, rmse_lst, rmse_it_lst, rmse_per_feature_it_lst, ylst = main(args)

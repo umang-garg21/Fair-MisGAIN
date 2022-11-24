@@ -29,13 +29,13 @@ import tensorflow.compat.v1 as tf
 import numpy as np
 from tqdm import tqdm
 
-from utils import normalization, renormalization, rounding
+from utils import normalization, renormalization, rounding, digitizing
 from utils import xavier_init
 from utils import binary_sampler, uniform_sampler, sample_batch_index
 from utils import rmse_loss
 
 
-def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[], deep_analysis=False):
+def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[], deep_analysis=False, bin_category_f= False, use_cont_f=True, use_cat_f=True):
   '''Impute missing values in data_x
   
   Args:
@@ -58,10 +58,15 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
   hint_rate = gain_parameters['hint_rate']
   alpha = gain_parameters['alpha']
   iterations = gain_parameters['iterations']
-  
+
   # Other parameters
   no, dim = data_x.shape
-  
+  print("use_cat_f", use_cat_f)
+  print("use_cont_f", use_cont_f)
+  if dim == len(categorical_features):
+    cont_features = False
+  else:
+    cont_features = True
   # Hidden state dimensions
   h_dim = int(dim)
   
@@ -69,6 +74,20 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
   norm_data, norm_parameters = normalization(data_x)
   norm_data_x = np.nan_to_num(norm_data, 0)
   
+  # Binning values for categorical features in the dataset 
+  bins =[]
+  if categorical_features:
+    for f in categorical_features:
+      temp = np.sort(np.unique(data_x[~np.isnan(data_x[:, f]), f]))
+
+      # Bin can be equally distributed as it is supposed to be OR exactly non nan values in data_x for now.
+      # a =  len(np.unique(temp))
+      # bins_f = np.arange(a)
+      # vector_norm = np.linalg.norm(bins_f)
+      # bins_f = bins_f/ vector_norm
+      # bins.append(bins_f)
+      bins.append(temp)
+      
   ## GAIN architecture
   # Input placeholders
   # Data vector
@@ -140,9 +159,37 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     D_logit = tf.matmul(D_h2, D_W3) + D_b3
     D_prob = tf.nn.sigmoid(D_logit)
     return D_prob
-  
+
+  ### GAN setup for reusability 
+  def GAN_setup(X_func, M_func, H_func):
+    # Generator
+    G_sample = generator(X_func, M_func)
+    # Combine with observed data
+    Hat_X = X_func * M_func + G_sample * (1- M_func)   
+    # Discriminator
+    D_prob = discriminator(Hat_X, H_func) # Output is Hat_M
+    ## GAIN loss
+    D_loss_temp = -tf.reduce_mean(M_func * tf.log(D_prob + 1e-8) \
+                                  + (1-M_func) * tf.log(1. - D_prob + 1e-8)) 
+    
+    G_loss_temp = -tf.reduce_mean((1-M_func) * tf.log(D_prob + 1e-8))
+
+    return G_sample, D_loss_temp, G_loss_temp
+
+  def MSE_calc(M_cont, X_cont, M_cat, X_cat, Gsample):
+
+    Gsample_vecs = tf.unstack(Gsample, axis=1)
+    Gsample_cont = tf.stack([ele for f, ele in enumerate(Gsample_vecs) if f not in categorical_features], 1)
+    Gsample_cat = tf.stack([ele for f, ele in enumerate(Gsample_vecs) if f in categorical_features], 1)
+
+    MSE_loss_cont = tf.reduce_mean((M_cont * X_cont - M_cont * Gsample_cont)**2) / tf.reduce_mean(M_cont)
+    MSE_loss_cat = tf.reduce_mean((M_cat * X_cat - M_cat * Gsample_cat)**2) / tf.reduce_mean(M_cat)
+
+    # MSE_loss_cat = -tf.reduce_mean(M_cat * X_cat * tf.log(M_cat * Gsample_cat + 1e-8)) / tf.reduce_mean(M_cat)
+    MSE_loss = MSE_loss_cont + MSE_loss_cat
+    return MSE_loss
+
   def calc_imputed_data():
-      
     ## Return imputed data      
     Z_mb_temp = uniform_sampler(0, 0.01, no, dim)
     M_mb_temp = data_m
@@ -156,8 +203,14 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # Renormalization
     imputed_data = renormalization(imputed_data, norm_parameters)
 
-    # Rounding
-    imputed_data = rounding(imputed_data, data_x, categorical_features)
+    if bin_category_f:
+      # digitize data
+      # print("Binning categorical features")
+      imputed_data = digitizing(imputed_data, data_x, bins, categorical_features)
+    else:
+      # Rounding
+      # print("Rounding")
+      imputed_data = rounding(imputed_data, data_x, categorical_features)
     
     return imputed_data
 
@@ -215,6 +268,7 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
 
     D_loss = D_loss_temp
     G_loss = G_loss_temp + alpha * MSE_loss
+
 
   ## GAIN solver
   D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=theta_D)

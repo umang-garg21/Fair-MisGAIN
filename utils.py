@@ -29,6 +29,7 @@ import numpy as np
 #import tensorflow as tf
 ##IF USING TF 2 use following import to still use TF < 2.0 Functionalities
 import tensorflow.compat.v1 as tf
+from sklearn.metrics import mean_squared_error
 tf.disable_v2_behavior()
 
 def normalization (data, parameters=None):
@@ -101,7 +102,6 @@ def renormalization (norm_data, norm_parameters):
     
   return renorm_data
 
-
 def rounding (imputed_data, data_x, categorical_features =[]):
   '''Round imputed data for categorical variables.
   
@@ -126,8 +126,39 @@ def rounding (imputed_data, data_x, categorical_features =[]):
 
   for f in categorical_features:
       rounded_data[:, f] = np.round(rounded_data[:, f])
+      
+      print("Orig data for feature",f, ":", np.unique(data_x[:,f]))
+      print("Imputed data for feature",f, ":", np.unique(imputed_data[:,f]))
+      print("Rounded data for feature",f, ":", np.unique(rounded_data[:,f]))
 
   return rounded_data
+
+def digitizing (imputed_data, data_x, bins, categorical_features =[]):
+  '''
+  Args:
+    - imputed_data: imputed data
+    - data_x: original data with missing values
+    
+  Returns:
+    - rounded_data: rounded imputed data
+  '''
+  _, dim = data_x.shape
+  dig_data = imputed_data.copy()
+
+  cat_f_ctr = 0
+  for f in categorical_features:
+    dig_data[:, f] = np.digitize(dig_data[:, f], bins[cat_f_ctr])
+    cat_f_ctr = cat_f_ctr + 1
+
+  cat_f_ctr = 0
+  dig_data, norm_p = normalization(dig_data)
+  for f in categorical_features:
+    # print("Unq original data for feature", f, ":", np.unique(data_x[:,f]))
+    # print("Bins for feature", f, ":", bins[cat_f_ctr])
+    # print("Unq Digitized data for feature",f, ":", np.unique(dig_data[:,f]))
+    cat_f_ctr = cat_f_ctr + 1
+
+  return dig_data
 
 
 def rmse_loss (ori_data, imputed_data, data_m):

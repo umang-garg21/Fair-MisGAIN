@@ -14,8 +14,8 @@
 
 '''Main function for UCI letter and spam datasets.
 '''
-
-#python3 main.py --data_name adult  --miss_rate 0.8 --batch_size 128 --hint_rate 0.9 --alpha 100 --iterations 10000
+##### CMD line input example ######################
+# python main.py --data_name adult  --miss_rate 0.1 --batch_size 128 --hint_rate 0.9  --alpha 100 --iterations 1000  --runs 5 --drop_f 8  --imputer Gain --deep_analysis False -bin_category_f True -use_cont_f True -use_cat_f True
 
 # Necessary packages
 from __future__ import absolute_import
@@ -26,12 +26,23 @@ import argparse
 
 import numpy as np
 import matplotlib.pyplot as plt
+from labellines import labelLine, labelLines
 from sklearn.impute import SimpleImputer, KNNImputer
 from sklearn.metrics import mean_squared_error
 
 from data_loader import data_loader
 from gain import gain
 from utils import rmse_loss, normalization, renormalization
+
+def parse_boolean(value):
+    value = value.lower()
+
+    if value in ["true", "yes", "y", "1", "t"]:
+        return True
+    elif value in ["false", "no", "n", "0", "f"]:
+        return False
+
+    return False
 
 def main (args):
   '''Main function for UCI letter and spam datasets.
@@ -59,6 +70,9 @@ def main (args):
   imputer_type = args.imputer_type
   drop_f_lst = args.drop_f
   runs = args.runs
+  bin_category_f = args.bin_category_f
+  use_cont_f = args.use_cont_f
+  use_cat_f = args.use_cat_f
   schedule = []
 
   print("drop_f_lst", drop_f_lst)
@@ -118,10 +132,10 @@ def main (args):
     elif imputer_type =='Gain':
       if deep_analysis:
         print(" ----------------- In-depth Analysis mode -------------------")
-        imputed_data_x, loss_list, rmse_it, rmse_per_feature_it = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, deep_analysis)
+        imputed_data_x, loss_list, rmse_it, rmse_per_feature_it = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, deep_analysis, bin_category_f, use_cont_f, use_cat_f)
       else:
         print(" ----------------- In-depth analysis skipped ---------------------")
-        imputed_data_x, loss_list = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, deep_analysis)
+        imputed_data_x, loss_list = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, deep_analysis, bin_category_f, use_cont_f, use_cat_f)
     
       # print("Loss list", loss_list)s
       y = loss_list
@@ -146,7 +160,9 @@ def main (args):
         if deep_analysis:
           p6 = plt.plot(x, rmse_it, label = 'RMSE Evolution'+'_'+str(r))
         plt.legend()
+        labelLines(plt.gca().get_lines(), align=False)
         plt.show()
+
       
       if deep_analysis:
         if not labels:
@@ -156,10 +172,12 @@ def main (args):
           fig2 = plt.figure()
           x = np.arange(len(rmse_it))
           plt.plot(x, rmse_per_feature_it, label = labels)
-          plt.legend()
+          # plt.legend()
+          labelLines(plt.gca().get_lines(), align=False)
           plt.show()
       
     # Finally Report the RMSE performance
+
     rmse, rmse_per_feature = rmse_loss(ori_data_x, imputed_data_x, data_m)
     rmse_lst.append(rmse)
     rmse_per_feature_lst.append(rmse_per_feature)
@@ -236,12 +254,6 @@ if __name__ == '__main__':
       default = 100,
       type=float)
   parser.add_argument(
-      '--deep_analysis',
-      help='Deeper Analysis for model validity',
-      choices= [True, False],
-      default = False,
-      type=bool)
-  parser.add_argument(
       '--imputer_type',
       help='Select imputer',
       choices = ['Simple', 'KNN', 'Gain'],
@@ -263,6 +275,27 @@ if __name__ == '__main__':
       help= 'Give number of runs for performance analysis',
       default = 1,
       type = int)
+  parser.add_argument(
+      '--deep_analysis',
+      help='Deeper Analysis for model validity',
+      choices= [True, False],
+      default = False,
+      type=parse_boolean)
+  parser.add_argument(
+      '-bin_category_f', '--bin_category_f',
+      help= 'toggle binning category features',
+      default = False,
+      type = parse_boolean)
+  parser.add_argument(
+      '-use_cat_f', '--use_cat_f',
+      help= 'use categorical features for training?',
+      default = True,
+      type = parse_boolean)
+  parser.add_argument(
+      '-use_cont_f', '--use_cont_f',
+      help= 'use continuous features for training?',
+      default = True,
+      type = parse_boolean)
 
   args = parser.parse_args() 
   

@@ -208,7 +208,8 @@ def xavier_init(size):
     - initialized random vector.
   '''
   in_dim = size[0]
-  xavier_stddev = 1. / tf.sqrt(in_dim / 2.)
+  print("in_dim", in_dim)
+  xavier_stddev = 1. / tf.sqrt(int(in_dim) / 2.)
   return tf.random_normal(shape = size, stddev = xavier_stddev)
       
 

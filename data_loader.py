@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''Data loader for UCI letter, spam and MNIST datasets.
+'''
+Data loader for UCI letter, spam and MNIST datasets.
 '''
 
 # Necessary packages
@@ -22,7 +23,10 @@ from utils import binary_sampler
 from keras.datasets import mnist
 from load_adult import load_adult
 
-def data_loader (data_name, miss_rate, drop_f_lst):
+def unstack(a, axis = 0):
+  return [np.squeeze(e, axis) for e in np.split(a, a.shape[axis], axis = axis)]
+
+def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
   '''Loads datasets and introduce missingness.
   
   Args:
@@ -34,13 +38,14 @@ def data_loader (data_name, miss_rate, drop_f_lst):
     miss_data_x: data with missing values
     data_m: indicator matrix for missing components
   '''
-
+  
   # Load data
   labels = []  
   categorical_features = []
+  
   if data_name in ['letter', 'spam']:
     file_name = 'data/'+data_name+'.csv'
-    data_x = np.loadtxt(file_name, delimiter=",", skiprows=1)   
+    data_x = np.loadtxt(file_name, delimiter=",", skiprows=1)
 
   elif data_name == 'mnist': 
     (data_x, _), _ = mnist.load_data()
@@ -83,8 +88,14 @@ def data_loader (data_name, miss_rate, drop_f_lst):
       file.truncate(0)
     df_obj.to_csv(file_name, index=False)
     labels = list(df_obj.columns.values)
+    print("Features present in the dataset used by GAIN:", labels)
 
-    print("labels for Imputation (Removing income label):", labels)
+    # Find label index of the feature to not introduce missingess to.
+    no_impute_f_indices = []
+    for f in no_impute_f:
+      no_impute_f_indices.append(labels.index(f))
+    print("no_impute_f_indices", no_impute_f_indices)
+    
     # Ref labels: ['age', 'workclass', 'education', 'education-num', 
     # 'marital-status', 'occupation', 'relationship', 'race', 'gender', 
     # 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country']
@@ -96,10 +107,20 @@ def data_loader (data_name, miss_rate, drop_f_lst):
 
   # Parameters
   no, dim = data_x.shape
-  
-  # Introduce missing data MCAR
-  data_m = binary_sampler(1-miss_rate, no, dim)
 
+  # Introduce missing data MCAR to relevant features
+ 
+  if no_impute_f_indices is None:
+    data_m = binary_sampler(1-miss_rate, no, dim)
+  else:
+    data_m = np.ones(data_x.shape)
+    for f in range(dim):
+      if f not in no_impute_f_indices:
+        data_m[:, f] = np.squeeze(binary_sampler(1-miss_rate, no, 1))
+
+    for f in no_impute_f_indices:
+      print("Unique mask values for no imputed feature f", f, ":", np.unique(data_m[:,f]))
+    
   miss_data_x = data_x.copy()
   miss_data_x[data_m == 0] = np.nan
 

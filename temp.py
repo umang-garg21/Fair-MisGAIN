@@ -36,21 +36,7 @@
     MSE_loss = MSE_calc(M_cont, X_cont, M_cat, X_cat, Gsample)
     D_loss = D_loss_temp
     G_loss = G_loss_temp + alpha * MSE_loss
-## GAIN structure
-  # Generator
-  G_sample = generator(X, M)
-  
-  # Combine with observed data
-  Hat_X = X * M + G_sample * (1-M)   
-  
-  # Discriminator
-  D_prob = discriminator(Hat_X, H) # Output is Hat_M
-  
-  ## GAIN loss
-  D_loss_temp = -tf.reduce_mean(M * tf.log(D_prob + 1e-8) \
-                                + (1-M) * tf.log(1. - D_prob + 1e-8)) 
-  
-  G_loss_temp = -tf.reduce_mean((1-M) * tf.log(D_prob + 1e-8))
+
 
   # This MSE loss is for vector which are already present: not for imputed data.
   # MSE_loss different for continious and binary features.

@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''Main function for UCI letter and spam datasets.
 '''
-##### CMD line input example ######################
-# python main.py --data_name adult  --miss_rate 0.1 --batch_size 128 --hint_rate 0.9  --alpha 100 --iterations 1000  --runs 5 --drop_f 8  --imputer Gain --deep_analysis False -bin_category_f True -use_cont_f True -use_cat_f True
+python main.py --data_name adult  --miss_rate 0.1 --batch_size 128 --hint_rate 0.9  --alpha 100 --iterations 1000  --runs 5 --drop_f  --imputer Gain --deep_analysis False -bin_category_f True -use_cont_f True -use_cat_f True
+'''
 
 # Necessary packages
 from __future__ import absolute_import
@@ -58,6 +57,9 @@ def main (args):
     - imputer type: select imputer 
     - drop_f: option to drop features
     - runs: number of runs
+    - no_impute_f: feature list not to introduce missigness.
+    - use_cont_f : use continuous features for training
+    - use_cat_f: use catergorical features for training
 
   Returns:
     - imputed_data_x_lst: imputed data list for all runs
@@ -73,6 +75,7 @@ def main (args):
   bin_category_f = args.bin_category_f
   use_cont_f = args.use_cont_f
   use_cat_f = args.use_cat_f
+  no_impute_f = args.no_impute_f
   schedule = []
 
   print("drop_f_lst", drop_f_lst)
@@ -85,7 +88,7 @@ def main (args):
                      'iterations': args.iterations}
   
   # Load data and introduce missingness
-  ori_data_x, miss_data_x, data_m, labels, categorical_features = data_loader(data_name, miss_rate, drop_f_lst)
+  ori_data_x, miss_data_x, data_m, labels, categorical_features = data_loader(data_name, miss_rate, drop_f_lst, no_impute_f)
   no, dim = ori_data_x.shape
   
   imputed_data_x_lst =[]
@@ -105,29 +108,11 @@ def main (args):
     if imputer_type == 'Simple':
       imputer = SimpleImputer(strategy='constant')
       imputed_data_x = imputer.fit_transform(miss_data_x)
-      deep_analysis = False
-      
-      """
-      ori_data_x, norm_parameters = normalization(ori_data_x)
-      imputed_data_x, _ = normalization(imputed_data_x, norm_parameters)
-      rmse_org = mean_squared_error(ori_data_x[data_m==0], imputed_data_x[data_m ==0], squared =False) 
-      # rmse_1 = np.sqrt(np.square(np.subtract(np.array([1, 0, 1]),np.array([1, 0, 0]))).mean())
-      # print("RMSE_1", rmse_1)
-      print("RMSE original: ", rmse_org)
-      """
       
     elif imputer_type == 'KNN':
       imputer= KNNImputer()
       imputed_data_x = imputer.fit_transform(miss_data_x)
       deep_analysis = False
-      """
-      ori_data_x, norm_parameters = normalization(ori_data_x)
-      imputed_data_x, _ = normalization(imputed_data_x, norm_parameters)
-      rmse_org = mean_squared_error(ori_data_x[data_m==0], imputed_data_x[data_m ==0], squared =False) 
-      # rmse_1 = np.sqrt(np.square(np.subtract(np.array([1, 0, 1]),np.array([1, 0, 0]))).mean())
-      # print("RMSE_1", rmse_1)
-      print("RMSE original: ", rmse_org)
-      """
 
     elif imputer_type =='Gain':
       if deep_analysis:
@@ -142,28 +127,25 @@ def main (args):
       ylst[r] = loss_list
       y1, y2, y3, y4, y5 = [], [], [], [], []
           
-      if runs == 1:
-        for it in range(len(loss_list)):
-          y1.append(y[it][0])  # D_loss
-          y2.append(y[it][1])  # MSE_loss_cont
-          y3.append(y[it][2])  # MSE_loss_Cat 
-          y4.append(y[it][3])  # MSE_loss_total  
-          y5.append(y[it][4])  # G_loss
+      for it in range(len(loss_list)):
+        y1.append(y[it][0])  # D_loss
+        y2.append(y[it][1])  # MSE_loss_cont
+        y3.append(y[it][2])  # MSE_loss_Cat 
+        y4.append(y[it][3])  # MSE_loss_total  
+        y5.append(y[it][4])  # G_loss
 
-        x = np.arange(len(loss_list))
-        fig1 = plt.figure()
-        p1 = plt.plot(x, y1, label = 'D_loss'+'_'+str(r))
-        p2 = plt.plot(x, y2, label = 'MSE_loss_cont'+'_'+str(r))
-        p3 = plt.plot(x, y3, label = 'MSE_loss_cat'+'_'+str(r))
-        p4 = plt.plot(x, np.sqrt(y4), label =  'Root MSE loss of generator for existing data'+'_'+str(r))
-        p5 = plt.plot(x, y5, label = 'G_loss'+'_'+str(r))
-        if deep_analysis:
-          p6 = plt.plot(x, rmse_it, label = 'RMSE Evolution'+'_'+str(r))
-        plt.legend()
-        labelLines(plt.gca().get_lines(), align=False)
-        plt.show()
-
-      
+      x = np.arange(len(loss_list))
+      fig1 = plt.figure()
+      plt.plot(x, y1, label = 'D_loss'+'_'+str(r))
+      plt.plot(x, y2, label = 'MSE_loss_cont'+'_'+str(r))
+      plt.plot(x, y3, label = 'MSE_loss_cat'+'_'+str(r))
+      plt.plot(x, np.sqrt(y4), label =  'Root MSE loss of generator for existing data'+'_'+str(r))
+      plt.plot(x, y5, label = 'G_loss'+'_'+str(r))
+      if deep_analysis:
+        plt.plot(x, rmse_it, label = 'RMSE Evolution'+'_'+str(r))
+      plt.legend()
+      labelLines(plt.gca().get_lines(), align=False)
+    
       if deep_analysis:
         if not labels:
           for i in range(dim):
@@ -172,8 +154,8 @@ def main (args):
           fig2 = plt.figure()
           x = np.arange(len(rmse_it))
           plt.plot(x, rmse_per_feature_it, label = labels)
-          # plt.legend()
-          labelLines(plt.gca().get_lines(), align=False)
+          plt.legend()
+          #labelLines(plt.gca().get_lines(), align=False)
           plt.show()
       
     # Finally Report the RMSE performance
@@ -270,6 +252,12 @@ if __name__ == '__main__':
       nargs='*',
       default = None,
       type = int)
+  parser.add_argument(
+      '-no_impute_f','--no_impute_f',
+      help= 'features to not introduce missingness to.',
+      nargs='*',
+      default = None,
+      type = str)
   parser.add_argument(
       '-runs', '--runs',
       help= 'Give number of runs for performance analysis',

@@ -88,7 +88,7 @@ def main (args):
                      'iterations': args.iterations}
   
   # Load data and introduce missingness
-  ori_data_x, miss_data_x, data_m, labels, categorical_features = data_loader(data_name, miss_rate, drop_f_lst, no_impute_f)
+  ori_data_x, miss_data_x, data_m, labels, categorical_features, binary_features = data_loader(data_name, miss_rate, drop_f_lst, no_impute_f)
   no, dim = ori_data_x.shape
   
   imputed_data_x_lst =[]
@@ -117,10 +117,10 @@ def main (args):
     elif imputer_type =='Gain':
       if deep_analysis:
         print(" ----------------- In-depth Analysis mode -------------------")
-        imputed_data_x, loss_list, rmse_it, rmse_per_feature_it = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, deep_analysis, bin_category_f, use_cont_f, use_cat_f)
+        imputed_data_x, loss_list, rmse_it, rmse_per_feature_it = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, binary_features, deep_analysis, bin_category_f, use_cont_f, use_cat_f)
       else:
         print(" ----------------- In-depth analysis skipped ---------------------")
-        imputed_data_x, loss_list = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, deep_analysis, bin_category_f, use_cont_f, use_cat_f)
+        imputed_data_x, loss_list = gain(ori_data_x, miss_data_x, gain_parameters, schedule, categorical_features, binary_features, deep_analysis, bin_category_f, use_cont_f, use_cat_f)
     
       # print("Loss list", loss_list)s
       y = loss_list
@@ -129,22 +129,22 @@ def main (args):
           
       for it in range(len(loss_list)):
         y1.append(y[it][0])  # D_loss
-        y2.append(y[it][1])  # MSE_loss_cont
-        y3.append(y[it][2])  # MSE_loss_Cat 
+        y2.append(y[it][1])  # MSE_loss_not_binary
+        y3.append(y[it][2])  # MSE_loss_binary
         y4.append(y[it][3])  # MSE_loss_total  
         y5.append(y[it][4])  # G_loss
 
       x = np.arange(len(loss_list))
       fig1 = plt.figure()
       plt.plot(x, y1, label = 'D_loss'+'_'+str(r))
-      plt.plot(x, y2, label = 'MSE_loss_cont'+'_'+str(r))
-      plt.plot(x, y3, label = 'MSE_loss_cat'+'_'+str(r))
-      plt.plot(x, np.sqrt(y4), label =  'Root MSE loss of generator for existing data'+'_'+str(r))
+      plt.plot(x, y2, label = 'MSE_loss_non_binary'+'_'+str(r))
+      plt.plot(x, y3, label = 'MSE_loss_binary'+'_'+str(r))
+      plt.plot(x, y4, label =  'MSE loss of generator for existing data'+'_'+str(r))
       plt.plot(x, y5, label = 'G_loss'+'_'+str(r))
       if deep_analysis:
         plt.plot(x, rmse_it, label = 'RMSE Evolution'+'_'+str(r))
       plt.legend()
-      labelLines(plt.gca().get_lines(), align=False)
+      # labelLines(plt.gca().get_lines(), align=False)
     
       if deep_analysis:
         if not labels:
@@ -288,5 +288,6 @@ if __name__ == '__main__':
   args = parser.parse_args() 
   
   print(args)
+
   # Calls main function  
   imputed_data_lst, rmse_lst, rmse_it_lst, rmse_per_feature_it_lst, ylst = main(args)

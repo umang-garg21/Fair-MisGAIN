@@ -62,15 +62,13 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
 
     with open(train_file,'r+') as file:
       file.truncate(0)
-    with open(test_file,'r+') as file:
-      file.truncate(0)
     # print("train_data.values :", train_data.values)
     train_data.to_csv(train_file, index=False)
     test_data.to_csv(test_file, index=False)
     
     df_obj = pd.read_csv(train_file)
 
-    #Removing columns for imputation: check with and without #
+    #Removing columns for imputation
     if drop_f_lst:
       df_obj = df_obj.drop(df_obj.columns[drop_f_lst], axis=1)
 
@@ -78,11 +76,15 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
     # categorical fields
     category_col = ['workclass', 'race', 'education', 'marital-status', 'occupation',
                     'relationship', 'sex', 'native-country', 'income']
+    binary_col = ['sex', 'income']
 
     categorical_features = []
+    binary_features = []
     for f_num, col in enumerate(list(df_obj.columns.values)):
         if col in category_col:
             categorical_features.append(f_num)
+        if col in binary_col:
+            binary_features.append(f_num)
 
     with open(file_name,'r+') as file:
       file.truncate(0)
@@ -129,6 +131,6 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
   # print("Mask matrix:", data_m)
   print("Categorical features for selected data:", categorical_features)
 
-  return data_x, miss_data_x, data_m, labels, categorical_features  # Original, MCAR X, mask, label, catergorical_feature 
+  return data_x, miss_data_x, data_m, labels, categorical_features, binary_features  # Original, MCAR X, mask, label, catergorical_features, binary_features 
 
 

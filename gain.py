@@ -35,7 +35,7 @@ from utils import binary_sampler, uniform_sampler, sample_batch_index
 from utils import rmse_loss
 
 
-def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[], deep_analysis=False, bin_category_f= False, use_cont_f=True, use_cat_f=True):
+def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[], binary_features=[], deep_analysis=False, bin_category_f= False, use_cont_f=True, use_cat_f=True):
   '''Impute missing values in data_x
   
   Args:
@@ -111,7 +111,7 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
  # D_W5 = tf.Variable(xavier_init([h_dim, dim]))
  # D_b5 = tf.Variable(tf.zeros(shape = [dim]))  # Multi-variate outputs
   
-  #Generator variables
+  # Generator variables
   # Data + Mask as inputs (Random noise is in missing components)
   # Input weight vector is morphed to shape according to input vector
   # G_W1 = tf.Variable(xavier_init([dim*2, h_dim*2]))  
@@ -151,12 +151,13 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     D_W1 = tf.Variable(xavier_init([(inputs.shape[1]), h_dim*2])) # Data + Hint as inputs..
     D_h1 = tf.nn.relu(tf.matmul(inputs, D_W1) + D_b1)
     D_h2 = tf.nn.relu(tf.matmul(D_h1, D_W2) + D_b2)
- #  D_h3 = tf.nn.relu(tf.matmul(D_h2, D_W3) + D_b3)
- #  D_h4 = tf.nn.relu(tf.matmul(D_h3, D_W4) + D_b4)
+  # D_h3 = tf.nn.relu(tf.matmul(D_h2, D_W3) + D_b3)
+  # D_h4 = tf.nn.relu(tf.matmul(D_h3, D_W4) + D_b4)
     D_logit = tf.matmul(D_h2, D_W3) + D_b3
     D_prob = tf.nn.sigmoid(D_logit)
     return D_prob, D_W1
 
+  const1 = 1e-8
   ### GAN setup for reusability 
   def GAN_setup(X_func, X, M_func, M, H):
     # Generator
@@ -167,26 +168,29 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # Discriminator
     D_prob, D_W1 = discriminator(Hat_X, H) # Output is Hat_M
     # GAIN loss
-    D_loss_temp = -tf.reduce_mean(M * tf.log(D_prob + 1e-8) \
-                                  + (1-M) * tf.log(1. - D_prob + 1e-8)) 
+
+    D_loss_temp = -tf.reduce_mean(M * tf.log(D_prob + const1) \
+                                  + (1-M) * tf.log(1. - D_prob + const1)) 
+        
+    G_loss_temp = -tf.reduce_mean((1-M) * tf.log(D_prob + const1))
     
-    G_loss_temp = -tf.reduce_mean((1-M) * tf.log(D_prob + 1e-8))
+    # G_loss_temp = -tf.reduce_mean(M * tf.log(1 - D_prob + const1) \
+    #                              + (1-M) * tf.log(D_prob + const1))
 
     return G_sample, D_loss_temp, G_loss_temp, G_W1, D_W1
 
-  def MSE_calc(M_cont, X_cont, M_cat, X_cat, G_sample):
+  const2 = 1e-10
+  def MSE_calc(M_non_bin, X_non_bin, M_bin, X_bin, G_sample):
 
     G_sample_vecs = tf.unstack(G_sample, axis=1)
-    G_sample_cont = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f not in categorical_features], 1)
-    G_sample_cat = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f in categorical_features], 1)
+    G_sample_not_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f not in binary_features], 1)
+    G_sample_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f in binary_features], 1)
+   
+    MSE_loss_not_binary = tf.reduce_mean((M_non_bin * X_non_bin - M_non_bin * G_sample_not_bin)**2) / tf.reduce_mean(M_non_bin)
+    MSE_loss_binary = -const3 * tf.reduce_mean(M_bin * X_bin * tf.log(M_bin * G_sample_bin + const2))
 
-    MSE_loss_cont = tf.reduce_mean((M_cont * X_cont - M_cont * G_sample_cont)**2) / tf.reduce_mean(M_cont)
-    MSE_loss_cat = tf.reduce_mean((M_cat * X_cat - M_cat * G_sample_cat)**2) / tf.reduce_mean(M_cat)
-    # MSE_loss_cat = -tf.reduce_mean(M_cat * X_cat * tf.log(M_cat * Gsample_cat + 1e-8)) / tf.reduce_mean(M_cat)
-
-    # MSE_loss_cat = -tf.reduce_mean(M_cat * X_cat * tf.log(M_cat * Gsample_cat + 1e-8)) / tf.reduce_mean(M_cat)
-    MSE_loss = MSE_loss_cont + MSE_loss_cat
-    return MSE_loss, MSE_loss_cont, MSE_loss_cat
+    MSE_loss = MSE_loss_not_binary + MSE_loss_binary
+    return MSE_loss, MSE_loss_not_binary, MSE_loss_binary
 
   def calc_imputed_data():
     ## Return imputed data      
@@ -212,61 +216,6 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
       imputed_data = rounding(imputed_data, data_x, categorical_features)
     
     return imputed_data
-
-  """
-    ## GAIN structure
-    # Generator
-    G_sample = generator(X, M)
-    
-    # Combine with observed data
-    Hat_X = X * M + G_sample * (1-M)   
-    
-    # Discriminator
-    D_prob = discriminator(Hat_X, H) # Output is Hat_M
-    
-    ## GAIN loss
-    D_loss_temp = -tf.reduce_mean(M * tf.log(D_prob + 1e-8) \
-                                  + (1-M) * tf.log(1. - D_prob + 1e-8)) 
-    
-    G_loss_temp = -tf.reduce_mean((1-M) * tf.log(D_prob + 1e-8))
-
-
-    # This MSE loss is for vector which are already present: not for imputed data.
-    # MSE_loss different for continious and binary features.
-    if not categorical_features:
-      MSE_loss = tf.reduce_mean((M * X - M * G_sample)**2) / tf.reduce_mean(M)
-      D_loss = D_loss_temp
-      G_loss = G_loss_temp + alpha * MSE_loss
-    else:
-      M_temp = M
-      X_temp = X
-      Gsample_temp = G_sample
-      M_vecs = tf.unstack(M_temp, axis=1)
-      X_vecs = tf.unstack(X_temp, axis=1)
-      Gsample_vecs = tf.unstack(Gsample_temp, axis=1)
-
-      M_cont = tf.stack([ele for f, ele in enumerate(M_vecs) if f not in categorical_features], 1)
-      M_cat = tf.stack([ele for f, ele in enumerate(M_vecs) if f in categorical_features], 1)
-
-      X_cont = tf.stack([ele for f, ele in enumerate(X_vecs) if f not in categorical_features], 1)
-      X_cat = tf.stack([ele for f, ele in enumerate(X_vecs) if f in categorical_features], 1)
-
-      Gsample_cont = tf.stack([ele for f, ele in enumerate(Gsample_vecs) if f not in categorical_features], 1)
-      Gsample_cat = tf.stack([ele for f, ele in enumerate(Gsample_vecs) if f in categorical_features], 1)
-
-      MSE_loss_cont = tf.reduce_mean((M_cont * X_cont - M_cont * Gsample_cont)**2) / tf.reduce_mean(M_cont)
-      MSE_loss_cat = -tf.reduce_mean((M_cat * X_cat) * tf.log(M_cat * Gsample_cat + 1e-8)) / tf.reduce_mean(M_cat)
-      # MSE_loss_cat = -tf.reduce_mean(M_cat * X_cat * tf.log(M_cat * Gsample_cat + 1e-8)) / tf.reduce_mean(M_cat)
-
-      MSE_loss = 0
-      use_categorical_data = False
-      use_cont_data = True
-
-      if use_cont_data:
-        MSE_loss = MSE_loss + MSE_loss_cont
-      if use_categorical_data:
-        MSE_loss = MSE_loss + MSE_loss_cat
-  """
   
   print("categorical features", categorical_features)
   print("use_cont_f", use_cont_f)
@@ -284,13 +233,19 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
 
     M_cont = tf.stack([ele for f, ele in enumerate(M_vecs) if f not in categorical_features], 1)
     M_cat = tf.stack([ele for f, ele in enumerate(M_vecs) if f in categorical_features], 1)
+    M_bin = tf.stack([ele for f, ele in enumerate(M_vecs) if f in binary_features], 1)
+    M_not_bin = tf.stack([ele for f, ele in enumerate(M_vecs) if f not in binary_features], 1)
 
     X_cont = tf.stack([ele for f, ele in enumerate(X_vecs) if f not in categorical_features], 1)
     X_cat = tf.stack([ele for f, ele in enumerate(X_vecs) if f in categorical_features], 1)
+    X_bin = tf.stack([ele for f, ele in enumerate(X_vecs) if f in binary_features], 1)
+    X_not_bin = tf.stack([ele for f, ele in enumerate(X_vecs) if f not in binary_features], 1)
 
     H_cont = tf.stack([ele for f, ele in enumerate(H_vecs) if f not in categorical_features], 1)
     H_cat = tf.stack([ele for f, ele in enumerate(H_vecs) if f in categorical_features], 1)
-    
+    H_bin = tf.stack([ele for f, ele in enumerate(H_vecs) if f in binary_features], 1) 
+    H_not_bin = tf.stack([ele for f, ele in enumerate(H_vecs) if f not in binary_features], 1) 
+
     if (not categorical_features) or (categorical_features and use_cont_f==True and use_cat_f==True):
       G_sample, D_loss_temp, G_loss_temp, G_W1, D_W1 = GAN_setup(X, X, M, M ,H)
       print(" -----------------------------DEBUG 1-----------------------------------")
@@ -303,10 +258,10 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
       G_sample, D_loss_temp, G_loss_temp, G_W1, D_W1 = GAN_setup(X_cat, X, M_cat, M, H)
       print(" -----------------------------DEBUG 3-----------------------------------")
 
-    # print("MSE_loss_cont, MSE_loss_cat, MSE_loss :", MSE_loss_cont, MSE_loss_cat, MSE_loss)
+    # print("MSE_loss_cont, MSE_loss_cat, MSE_loss :", MSE_loss_cont, MSE_loss_cat, MSE_loss)    
 
     # This MSE loss is for vectors which are already present: not for imputed data.
-    MSE_loss, MSE_loss_cont, MSE_loss_cat = MSE_calc(M_cont, X_cont, M_cat, X_cat, G_sample)
+    MSE_loss, MSE_loss_not_binary, MSE_loss_binary = MSE_calc(M_not_bin, X_not_bin, M_bin, X_bin, G_sample)
     D_loss = D_loss_temp
     G_loss = G_loss_temp + alpha * MSE_loss
 
@@ -363,13 +318,13 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # print("M is:", M)
     # print ("G Sample is :", G_sample)  
 
-    _, G_loss_curr, MSE_loss_curr, MSE_loss_cont_curr, MSE_loss_cat_curr = \
-    sess.run([G_solver, G_loss_temp, MSE_loss, MSE_loss_cont, MSE_loss_cat],
+    _, G_loss_curr, MSE_loss_curr, MSE_loss_not_binary_curr, MSE_loss_binary_curr = \
+    sess.run([G_solver, G_loss_temp, MSE_loss, MSE_loss_not_binary, MSE_loss_binary],
               feed_dict = {X: X_mb, M: M_mb, H: H_mb})
 
-    ################################################
-    ##### Check RMSE after every iteration ######
-    ################################################
+    ##################################################
+    ######## Check RMSE after every iteration ########
+    ##################################################
 
     if deep_analysis:
       imputed_data_it = calc_imputed_data()
@@ -378,9 +333,9 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # print("MSE loss at iteration", it, ":", MSE_loss)
     # print("MSE loss current at iteration", it, ":", MSE_loss_curr)
 
-    loss_list.append((D_loss_curr, MSE_loss_cont_curr, MSE_loss_cat_curr, MSE_loss_curr, G_loss_curr))
+    loss_list.append((D_loss_curr, MSE_loss_not_binary_curr, MSE_loss_binary_curr, MSE_loss_curr, G_loss_curr))
     
-  ## Return imputed data      
+  ## Return imputed data    
   imputed_data = calc_imputed_data()
 
   if deep_analysis:

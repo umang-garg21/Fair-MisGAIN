@@ -59,7 +59,7 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
     file_name = 'data/'+data_name+'.csv'
     train_file = 'data/'+'train_'+data_name+'.csv'
     test_file = 'data/'+'test_'+data_name+'.csv'
-
+    
     with open(train_file,'r+') as file:
       file.truncate(0)
     # print("train_data.values :", train_data.values)
@@ -81,10 +81,11 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
     categorical_features = []
     binary_features = []
     for f_num, col in enumerate(list(df_obj.columns.values)):
-        if col in category_col:
-            categorical_features.append(f_num)
-        if col in binary_col:
-            binary_features.append(f_num)
+      print("f_num, col", f_num, col)
+      if col in category_col:
+          categorical_features.append(f_num)
+      if col in binary_col:
+          binary_features.append(f_num)
 
     with open(file_name,'r+') as file:
       file.truncate(0)

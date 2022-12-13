@@ -28,6 +28,8 @@ import tensorflow.compat.v1 as tf
 
 import numpy as np
 from tqdm import tqdm
+import pandas as pd 
+from scipy.stats import chi2_contingency
 
 from utils import normalization, renormalization, rounding, digitizing
 from utils import xavier_init
@@ -66,6 +68,7 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
   no, dim = data_x.shape
   # Hidden state dimensions
   h_dim = int(dim)
+  G_sample_bin_correlation = []
 
   # Normalization
   norm_data, norm_parameters = normalization(data_x)
@@ -180,17 +183,29 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     return G_sample, D_loss_temp, G_loss_temp, G_W1, D_W1
 
   const2 = 1e-10
+  const3 = 1
   def MSE_calc(M_non_bin, X_non_bin, M_bin, X_bin, G_sample):
-
+    
     G_sample_vecs = tf.unstack(G_sample, axis=1)
     G_sample_not_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f not in binary_features], 1)
     G_sample_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f in binary_features], 1)
    
     MSE_loss_not_binary = tf.reduce_mean((M_non_bin * X_non_bin - M_non_bin * G_sample_not_bin)**2) / tf.reduce_mean(M_non_bin)
     MSE_loss_binary = -const3 * tf.reduce_mean(M_bin * X_bin * tf.log(M_bin * G_sample_bin + const2))
-
+    
     MSE_loss = MSE_loss_not_binary + MSE_loss_binary
     return MSE_loss, MSE_loss_not_binary, MSE_loss_binary
+  
+  def G_sample_bin_corr(ori_X_bin, G_sample_bin):
+
+    print("ori_data shape", ori_X_bin.shape)
+    df1=pd.DataFrame(ori_X_bin)
+    df2=pd.DataFrame(G_sample_bin)
+    df=pd.concat([df1,df2],axis=1)
+    df.columns = ['ori_X_bin', 'G_sample_bin']
+    corr = df['ori_X_bin'].corr(df['G_sample_bin'])
+    print("corr", corr)
+    return corr
 
   def calc_imputed_data():
     ## Return imputed data      
@@ -209,12 +224,17 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     if bin_category_f:
       # digitize data
       # print("Binning categorical features")
-      imputed_data = digitizing(imputed_data, data_x, bins, categorical_features)
+      imputed_data = digitizing(imputed_data, data_x, bins, categorical_features, binary_features)
+
+
     else:
       # Rounding
       # print("Rounding")
       imputed_data = rounding(imputed_data, data_x, categorical_features)
-    
+
+
+
+
     return imputed_data
   
   print("categorical features", categorical_features)
@@ -261,6 +281,11 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # print("MSE_loss_cont, MSE_loss_cat, MSE_loss :", MSE_loss_cont, MSE_loss_cat, MSE_loss)    
 
     # This MSE loss is for vectors which are already present: not for imputed data.
+    G_sample_temp = G_sample
+    G_sample_vecs = tf.unstack(G_sample_temp, 1)
+    # G_sample_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f in binary_features], 1) 
+    # G_sample_not_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f not in binary_features], 1) 
+
     MSE_loss, MSE_loss_not_binary, MSE_loss_binary = MSE_calc(M_not_bin, X_not_bin, M_bin, X_bin, G_sample)
     D_loss = D_loss_temp
     G_loss = G_loss_temp + alpha * MSE_loss
@@ -289,10 +314,8 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # print("rmse_per_feature_it shape", rmse_per_feature_it.shape)
 
   # Start Iterations
-  for it in tqdm(range(iterations)):    
-
+  for it in tqdm(range(iterations)):
    # print(" --------------------iteration:", it, "-------------------------- ")
-    
     # Sample batch
     batch_idx = sample_batch_index(no, batch_size)
     X_mb = norm_data_x[batch_idx, :]
@@ -329,14 +352,26 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     if deep_analysis:
       imputed_data_it = calc_imputed_data()
       rmse_it[it], rmse_per_feature_it[it, :] = rmse_loss(ori_data_x, imputed_data_it, data_m)
-
     # print("MSE loss at iteration", it, ":", MSE_loss)
     # print("MSE loss current at iteration", it, ":", MSE_loss_curr)
-
+    
     loss_list.append((D_loss_curr, MSE_loss_not_binary_curr, MSE_loss_binary_curr, MSE_loss_curr, G_loss_curr))
     
+    # Calculate binary correlations.
+    for f in binary_features:
+      # print("Ori data binary", ori_data_x[:, f])
+      df = pd.DataFrame(ori_data_x[:, f]-imputed_data_it[:,f])
+      pd.set_option('display.max_rows', None)
+      # print("df", df)
+      G_sample_bin_correlation.append(G_sample_bin_corr(ori_data_x[:,f], imputed_data_it[:,f]))
+
   ## Return imputed data    
   imputed_data = calc_imputed_data()
+  
+  import matplotlib.pyplot as plt
+  x = np.arange(len(G_sample_bin_correlation))
+  fig = plt.figure()
+  plt.plot(x, G_sample_bin_correlation)
 
   if deep_analysis:
     return imputed_data, loss_list, rmse_it, rmse_per_feature_it

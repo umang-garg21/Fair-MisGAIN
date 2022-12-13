@@ -49,17 +49,16 @@ def normalization (data, parameters=None):
   norm_data = data.copy()
   
   if parameters is None:
-
     # MinMax normalization
     min_val = np.zeros(dim)
     max_val = np.zeros(dim)
   
     # For each dimension
     for i in range(dim):
-      min_val[i] = np.nanmin(norm_data[:,i])
-      norm_data[:,i] = norm_data[:,i] - np.nanmin(norm_data[:,i])
-      max_val[i] = np.nanmax(norm_data[:,i])
-      norm_data[:,i] = norm_data[:,i] / (np.nanmax(norm_data[:,i]) + 1e-6)  #in case nanmax returns nan or 0, add 1e-6
+      min_val[i] = np.nanmin(norm_data[:, i])
+      norm_data[:, i] = norm_data[:, i] - np.nanmin(norm_data[:, i])
+      max_val[i] = np.nanmax(norm_data[:, i])
+      norm_data[:, i] = norm_data[:, i] / (np.nanmax(norm_data[:, i]) + 1e-6)  #in case nanmax returns nan or 0, add 1e-6
       
     # Return norm_parameters for renormalization
     norm_parameters = {'min_val': min_val,
@@ -126,14 +125,14 @@ def rounding (imputed_data, data_x, categorical_features =[]):
 
   for f in categorical_features:
       rounded_data[:, f] = np.round(rounded_data[:, f])
-      
       print("Orig data for feature",f, ":", np.unique(data_x[:,f]))
       print("Imputed data for feature",f, ":", np.unique(imputed_data[:,f]))
       print("Rounded data for feature",f, ":", np.unique(rounded_data[:,f]))
-
+  
   return rounded_data
 
-def digitizing (imputed_data, data_x, bins, categorical_features =[]):
+
+def digitizing (imputed_data, data_x, bins, categorical_features =[], binary_features=[]):
   '''
   Args:
     - imputed_data: imputed data
@@ -145,18 +144,20 @@ def digitizing (imputed_data, data_x, bins, categorical_features =[]):
   _, dim = data_x.shape
   dig_data = imputed_data.copy()
 
-  cat_f_ctr = 0
-  for f in categorical_features:
-    dig_data[:, f] = np.digitize(dig_data[:, f], bins[cat_f_ctr])
-    cat_f_ctr = cat_f_ctr + 1
+  for i, f in enumerate(categorical_features):
+    # print("dig data", dig_data[:, f])
+    if f not in binary_features:
+      dig_data[:, f] = np.digitize(dig_data[:, f], bins[i])
+      temp, norm_p = normalization(np.expand_dims(dig_data[:, f], axis=-1))
+      dig_data[:, f] = np.squeeze(temp)
+    else:
+      dig_data[:, f] = np.round(dig_data[:, f])
 
-  cat_f_ctr = 0
-  dig_data, norm_p = normalization(dig_data)
-  for f in categorical_features:
+  for i, f in enumerate(categorical_features):
     # print("Unq original data for feature", f, ":", np.unique(data_x[:,f]))
-    # print("Bins for feature", f, ":", bins[cat_f_ctr])
+    # print("Bins for feature", f, ":", bins[i])
     # print("Unq Digitized data for feature",f, ":", np.unique(dig_data[:,f]))
-    cat_f_ctr = cat_f_ctr + 1
+    pass
 
   return dig_data
 

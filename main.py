@@ -96,7 +96,7 @@ def main (args):
   rmse_per_feature_lst =[]
   rmse_it_lst = []
   rmse_per_feature_it_lst = []
-  
+
   ylst = [[] for i in range(runs)]
 
   for r in range(runs):
@@ -113,7 +113,7 @@ def main (args):
       imputer= KNNImputer()
       imputed_data_x = imputer.fit_transform(miss_data_x)
       deep_analysis = False
-
+    
     elif imputer_type =='Gain':
       if deep_analysis:
         print(" ----------------- In-depth Analysis mode -------------------")

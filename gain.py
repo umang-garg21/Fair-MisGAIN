@@ -108,11 +108,11 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
   D_W3 = tf.Variable(xavier_init([h_dim*2, h_dim]))
   D_b3 = tf.Variable(tf.zeros(shape = [h_dim]))
 
- # D_W4 = tf.Variable(xavier_init([h_dim, h_dim]))
- # D_b4 = tf.Variable(tf.zeros(shape = [h_dim])) 
+  # D_W4 = tf.Variable(xavier_init([h_dim, h_dim]))
+  # D_b4 = tf.Variable(tf.zeros(shape = [h_dim])) 
 
- # D_W5 = tf.Variable(xavier_init([h_dim, dim]))
- # D_b5 = tf.Variable(tf.zeros(shape = [dim]))  # Multi-variate outputs
+  # D_W5 = tf.Variable(xavier_init([h_dim, dim]))
+  # D_b5 = tf.Variable(tf.zeros(shape = [dim]))  # Multi-variate outputs
   
   # Generator variables
   # Data + Mask as inputs (Random noise is in missing components)
@@ -126,11 +126,11 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
   G_W3 = tf.Variable(xavier_init([h_dim*2, dim]))
   G_b3 = tf.Variable(tf.zeros(shape = [dim]))
 
-#  G_W4 = tf.Variable(xavier_init([h_dim, dim]))
-#  G_b4 = tf.Variable(tf.zeros(shape = [dim]))
+  # G_W4 = tf.Variable(xavier_init([h_dim, dim]))
+  # G_b4 = tf.Variable(tf.zeros(shape = [dim]))
 
-#  G_W5 = tf.Variable(xavier_init([h_dim, dim]))
-#  G_b5 = tf.Variable(tf.zeros(shape = [dim]))
+  # G_W5 = tf.Variable(xavier_init([h_dim, dim]))
+  # G_b5 = tf.Variable(tf.zeros(shape = [dim]))
  
 ## GAIN functions
   # Generator
@@ -154,10 +154,11 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     D_W1 = tf.Variable(xavier_init([(inputs.shape[1]), h_dim*2])) # Data + Hint as inputs..
     D_h1 = tf.nn.relu(tf.matmul(inputs, D_W1) + D_b1)
     D_h2 = tf.nn.relu(tf.matmul(D_h1, D_W2) + D_b2)
-  # D_h3 = tf.nn.relu(tf.matmul(D_h2, D_W3) + D_b3)
-  # D_h4 = tf.nn.relu(tf.matmul(D_h3, D_W4) + D_b4)
+    # D_h3 = tf.nn.relu(tf.matmul(D_h2, D_W3) + D_b3)
+    # D_h4 = tf.nn.relu(tf.matmul(D_h3, D_W4) + D_b4)
     D_logit = tf.matmul(D_h2, D_W3) + D_b3
-    D_prob = tf.nn.sigmoid(D_logit)
+    # D_prob = tf.nn.sigmoid(D_logit)
+    D_prob = D_logit
     return D_prob, D_W1
 
   const1 = 1e-8
@@ -171,7 +172,7 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # Discriminator
     D_prob, D_W1 = discriminator(Hat_X, H) # Output is Hat_M
     # GAIN loss
-
+    
     D_loss_temp = -tf.reduce_mean(M * tf.log(D_prob + const1) \
                                   + (1-M) * tf.log(1. - D_prob + const1)) 
         
@@ -197,14 +198,11 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     return MSE_loss, MSE_loss_not_binary, MSE_loss_binary
   
   def G_sample_bin_corr(ori_X_bin, G_sample_bin):
-
-    print("ori_data shape", ori_X_bin.shape)
-    df1=pd.DataFrame(ori_X_bin)
-    df2=pd.DataFrame(G_sample_bin)
-    df=pd.concat([df1,df2],axis=1)
+    df1 = pd.DataFrame(ori_X_bin)
+    df2 = pd.DataFrame(G_sample_bin)
+    df = pd.concat([df1, df2],axis=1)
     df.columns = ['ori_X_bin', 'G_sample_bin']
     corr = df['ori_X_bin'].corr(df['G_sample_bin'])
-    print("corr", corr)
     return corr
 
   def calc_imputed_data():
@@ -225,15 +223,10 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
       # digitize data
       # print("Binning categorical features")
       imputed_data = digitizing(imputed_data, data_x, bins, categorical_features, binary_features)
-
-
     else:
       # Rounding
       # print("Rounding")
       imputed_data = rounding(imputed_data, data_x, categorical_features)
-
-
-
 
     return imputed_data
   
@@ -242,7 +235,6 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
   print("use_cat_f", use_cat_f)
   if (not categorical_features) and (not use_cont_f):
     raise Exception("Use_cont_f cannot be False when no categorical data in the database")
-    print(" -----------------------------DEBUG 0-----------------------------------")
   else:
     M_temp = M
     X_temp = X
@@ -268,15 +260,12 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
 
     if (not categorical_features) or (categorical_features and use_cont_f==True and use_cat_f==True):
       G_sample, D_loss_temp, G_loss_temp, G_W1, D_W1 = GAN_setup(X, X, M, M ,H)
-      print(" -----------------------------DEBUG 1-----------------------------------")
 
     elif use_cont_f and not use_cat_f:
       G_sample, D_loss_temp, G_loss_temp, G_W1, D_W1 = GAN_setup(X_cont, X, M_cont, M, H)
-      print(" -----------------------------DEBUG 2-----------------------------------")
 
     elif use_cat_f and not use_cont_f:
       G_sample, D_loss_temp, G_loss_temp, G_W1, D_W1 = GAN_setup(X_cat, X, M_cat, M, H)
-      print(" -----------------------------DEBUG 3-----------------------------------")
 
     # print("MSE_loss_cont, MSE_loss_cat, MSE_loss :", MSE_loss_cont, MSE_loss_cat, MSE_loss)    
 
@@ -323,7 +312,7 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
 
     # Sample random vectors
     Z_mb = uniform_sampler(0, 0.01, batch_size, dim)
-
+    
     # Sample hint vectors
     H_mb_temp = binary_sampler(hint_rate, batch_size, dim)
 
@@ -332,9 +321,6 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     
     # Combine random vectors with observed vectors
     X_mb = M_mb * X_mb + (1-M_mb) * Z_mb 
-      
-    _, D_loss_curr = sess.run([D_solver, D_loss_temp], 
-                              feed_dict = {M: M_mb, X: X_mb, H: H_mb})
 
     # print("X is:") 
     # tf.print(X)
@@ -345,6 +331,12 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     sess.run([G_solver, G_loss_temp, MSE_loss, MSE_loss_not_binary, MSE_loss_binary],
               feed_dict = {X: X_mb, M: M_mb, H: H_mb})
 
+    # Sample random vectors
+    noise = uniform_sampler(0, 1, batch_size, dim)
+
+    _, D_loss_curr = sess.run([D_solver, D_loss_temp], 
+                            feed_dict = {M: M_mb, X: X_mb +(noise), H: H_mb})
+
     ##################################################
     ######## Check RMSE after every iteration ########
     ##################################################
@@ -352,27 +344,28 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     if deep_analysis:
       imputed_data_it = calc_imputed_data()
       rmse_it[it], rmse_per_feature_it[it, :] = rmse_loss(ori_data_x, imputed_data_it, data_m)
-    # print("MSE loss at iteration", it, ":", MSE_loss)
-    # print("MSE loss current at iteration", it, ":", MSE_loss_curr)
+      # print("MSE loss at iteration", it, ":", MSE_loss)
+      # print("MSE loss current at iteration", it, ":", MSE_loss_curr)
     
-    loss_list.append((D_loss_curr, MSE_loss_not_binary_curr, MSE_loss_binary_curr, MSE_loss_curr, G_loss_curr))
-    
-    # Calculate binary correlations.
-    for f in binary_features:
-      # print("Ori data binary", ori_data_x[:, f])
-      df = pd.DataFrame(ori_data_x[:, f]-imputed_data_it[:,f])
-      pd.set_option('display.max_rows', None)
-      # print("df", df)
-      G_sample_bin_correlation.append(G_sample_bin_corr(ori_data_x[:,f], imputed_data_it[:,f]))
+      # Calculate binary correlations.
+      for f in binary_features:
+        # print("Ori data binary", ori_data_x[:, f])
+        df = pd.DataFrame(ori_data_x[:, f] - imputed_data_it[:, f])
+        pd.set_option('display.max_rows', None)
+        # print("df", df)
+        print("Number of bad imputation entries:", np.count_nonzero(ori_data_x[:, f]-imputed_data_it[:,f]))
+        G_sample_bin_correlation.append(G_sample_bin_corr(ori_data_x[:,f], imputed_data_it[:,f]))
 
-  ## Return imputed data    
+    loss_list.append((D_loss_curr, MSE_loss_not_binary_curr, MSE_loss_binary_curr, MSE_loss_curr, G_loss_curr))
+
+  ## Return imputed data
   imputed_data = calc_imputed_data()
   
   import matplotlib.pyplot as plt
   x = np.arange(len(G_sample_bin_correlation))
   fig = plt.figure()
   plt.plot(x, G_sample_bin_correlation)
-
+  
   if deep_analysis:
     return imputed_data, loss_list, rmse_it, rmse_per_feature_it
   else:

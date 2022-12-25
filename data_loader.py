@@ -22,6 +22,7 @@ import pandas as pd
 from utils import binary_sampler
 from keras.datasets import mnist
 from load_adult import load_adult
+from load_compas import load_compas_data
 
 def unstack(a, axis = 0):
   return [np.squeeze(e, axis) for e in np.split(a, a.shape[axis], axis = axis)]
@@ -42,6 +43,7 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
   # Load data
   labels = []  
   categorical_features = []
+  binary_features = []
   
   if data_name in ['letter', 'spam']:
     file_name = 'data/'+data_name+'.csv'
@@ -59,7 +61,7 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
     file_name = 'data/'+data_name+'.csv'
     train_file = 'data/'+'train_'+data_name+'.csv'
     test_file = 'data/'+'test_'+data_name+'.csv'
-    
+  
     with open(train_file,'r+') as file:
       file.truncate(0)
     # print("train_data.values :", train_data.values)
@@ -79,7 +81,7 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
     binary_col = ['sex', 'income']
 
     categorical_features = []
-    binary_features = []
+    
     for f_num, col in enumerate(list(df_obj.columns.values)):
       print("f_num, col", f_num, col)
       if col in category_col:
@@ -106,13 +108,28 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
     data_x = np.loadtxt(file_name, delimiter=",", skiprows = 1)
     
   elif data_name == 'Compas':
-    pass
+    data_x, y, z, labels = load_compas_data()
+    train_file = 'data/'+data_name+'.csv'
+    print("output vector in COMPAS", y)
+    print("labels in COMPAS", labels)
+
+    with open(train_file,'r+') as file:
+      file.truncate(0)
+    # print("train_data.values :", train_data.values)
+    df = pd.DataFrame(data_x, columns=labels)
+    df.to_csv(train_file, index=False, header=True, sep=',')
+    df_obj = pd.read_csv(train_file)
+
+    # Find label index of the feature to not introduce missingess to.
+    no_impute_f_indices = []
+    for f in no_impute_f:
+      no_impute_f_indices.append(labels.index(f))
+    print("no_impute_f_indices", no_impute_f_indices)
 
   # Parameters
   no, dim = data_x.shape
 
   # Introduce missing data MCAR to relevant features
- 
   if no_impute_f_indices is None:
     data_m = binary_sampler(1-miss_rate, no, dim)
   else:
@@ -123,7 +140,7 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
 
     for f in no_impute_f_indices:
       print("Unique mask values for no imputed feature f", f, ":", np.unique(data_m[:,f]))
-    
+  
   miss_data_x = data_x.copy()
   miss_data_x[data_m == 0] = np.nan
 
@@ -131,6 +148,7 @@ def data_loader (data_name, miss_rate, drop_f_lst, no_impute_f= []):
   # print("Data with missing entries:", miss_data_x)
   # print("Mask matrix:", data_m)
   print("Categorical features for selected data:", categorical_features)
+
 
   return data_x, miss_data_x, data_m, labels, categorical_features, binary_features  # Original, MCAR X, mask, label, catergorical_features, binary_features 
 

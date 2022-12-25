@@ -189,10 +189,14 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     
     G_sample_vecs = tf.unstack(G_sample, axis=1)
     G_sample_not_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f not in binary_features], 1)
-    G_sample_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f in binary_features], 1)
-   
     MSE_loss_not_binary = tf.reduce_mean((M_non_bin * X_non_bin - M_non_bin * G_sample_not_bin)**2) / tf.reduce_mean(M_non_bin)
-    MSE_loss_binary = -const3 * tf.reduce_mean(M_bin * X_bin * tf.log(M_bin * G_sample_bin + const2))
+
+    if not binary_features:
+      G_sample_bin = []
+      MSE_loss_binary = 0
+    else:
+      G_sample_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f in binary_features], 1)
+      MSE_loss_binary = -const3 * tf.reduce_mean(M_bin * X_bin * tf.log(M_bin * G_sample_bin + const2))  
     
     MSE_loss = MSE_loss_not_binary + MSE_loss_binary
     return MSE_loss, MSE_loss_not_binary, MSE_loss_binary
@@ -200,13 +204,13 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
   def G_sample_bin_corr(ori_X_bin, G_sample_bin):
     df1 = pd.DataFrame(ori_X_bin)
     df2 = pd.DataFrame(G_sample_bin)
-    df = pd.concat([df1, df2],axis=1)
+    df = pd.concat([df1, df2], axis=1)
     df.columns = ['ori_X_bin', 'G_sample_bin']
     corr = df['ori_X_bin'].corr(df['G_sample_bin'])
     return corr
 
   def calc_imputed_data():
-    ## Return imputed data      
+    ## Return imputed data  
     Z_mb_temp = uniform_sampler(0, 0.01, no, dim)
     M_mb_temp = data_m
     X_mb_temp = norm_data_x
@@ -244,18 +248,29 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     H_vecs = tf.unstack(H_temp, axis=1)
 
     M_cont = tf.stack([ele for f, ele in enumerate(M_vecs) if f not in categorical_features], 1)
-    M_cat = tf.stack([ele for f, ele in enumerate(M_vecs) if f in categorical_features], 1)
-    M_bin = tf.stack([ele for f, ele in enumerate(M_vecs) if f in binary_features], 1)
-    M_not_bin = tf.stack([ele for f, ele in enumerate(M_vecs) if f not in binary_features], 1)
-
     X_cont = tf.stack([ele for f, ele in enumerate(X_vecs) if f not in categorical_features], 1)
-    X_cat = tf.stack([ele for f, ele in enumerate(X_vecs) if f in categorical_features], 1)
-    X_bin = tf.stack([ele for f, ele in enumerate(X_vecs) if f in binary_features], 1)
-    X_not_bin = tf.stack([ele for f, ele in enumerate(X_vecs) if f not in binary_features], 1)
-
     H_cont = tf.stack([ele for f, ele in enumerate(H_vecs) if f not in categorical_features], 1)
-    H_cat = tf.stack([ele for f, ele in enumerate(H_vecs) if f in categorical_features], 1)
-    H_bin = tf.stack([ele for f, ele in enumerate(H_vecs) if f in binary_features], 1) 
+
+    if not categorical_features:
+      M_cat = []
+      X_cat = []
+      H_cat = []
+    else:
+      M_cat = tf.stack([ele for f, ele in enumerate(M_vecs) if f in categorical_features], 1)
+      X_cat = tf.stack([ele for f, ele in enumerate(X_vecs) if f in categorical_features], 1)
+      H_cat = tf.stack([ele for f, ele in enumerate(H_vecs) if f in categorical_features], 1)
+
+    if not binary_features:
+      M_bin = []
+      X_bin = []
+      H_bin = []
+    else:
+      M_bin = tf.stack([ele for f, ele in enumerate(M_vecs) if f in binary_features], 1)
+      X_bin = tf.stack([ele for f, ele in enumerate(X_vecs) if f in binary_features], 1)
+      H_bin = tf.stack([ele for f, ele in enumerate(H_vecs) if f in binary_features], 1) 
+
+    M_not_bin = tf.stack([ele for f, ele in enumerate(M_vecs) if f not in binary_features], 1)
+    X_not_bin = tf.stack([ele for f, ele in enumerate(X_vecs) if f not in binary_features], 1)
     H_not_bin = tf.stack([ele for f, ele in enumerate(H_vecs) if f not in binary_features], 1) 
 
     if (not categorical_features) or (categorical_features and use_cont_f==True and use_cat_f==True):

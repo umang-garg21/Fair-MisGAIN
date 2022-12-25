@@ -7,7 +7,6 @@ from sklearn import feature_extraction
 from sklearn import preprocessing
 from random import seed, shuffle
 
-
 """
     The adult dataset can be obtained from: https://raw.githubusercontent.com/propublica/compas-analysis/master/compas-scores-two-years.csv
     The code will look for the data file in the present directory, if it is not found, it will download them from GitHub.
@@ -19,14 +18,13 @@ def load_compas_data():
 	seed(SEED)
 	np.random.seed(SEED)
 
-
 	FEATURES_CLASSIFICATION = ["age_cat", "race", "sex", "priors_count", "c_charge_degree"] #features to be used for classification
 	CONT_VARIABLES = ["priors_count"] # continuous features, will need to be handled separately from categorical features, categorical features will be encoded using one-hot
 	CLASS_FEATURE = "two_year_recid" # the decision variable
 	SENSITIVE_ATTRS = ["race"]
 
 	# load the data and get some stats
-	df = pd.read_csv('../data/compas-scores-two-years.csv')
+	df = pd.read_csv('data/compas-scores-two-years.csv')
 	df = df.dropna(subset=["days_b_screening_arrest"]) # dropping missing vals
 	
 	# convert to np array
@@ -35,11 +33,9 @@ def load_compas_data():
 		data[k] = np.array(data[k])
 
 	""" Filtering the data """
-
 	# These filters are the same as propublica (refer to https://github.com/propublica/compas-analysis)
 	# If the charge date of a defendants Compas scored crime was not within 30 days from when the person was arrested, we assume that because of data quality reasons, that we do not have the right offense. 
 	idx = np.logical_and(data["days_b_screening_arrest"]<=30, data["days_b_screening_arrest"]>=-30)
-
 
 	# We coded the recidivist flag -- is_recid -- to be -1 if we could not find a compas case at all.
 	idx = np.logical_and(idx, data["is_recid"] != -1)
@@ -63,7 +59,7 @@ def load_compas_data():
 	y = data[CLASS_FEATURE]
 	y[y==0] = -1
 
-	print ("\nNumber of people recidivating within two years")
+	print ("\n Number of people recidivating within two years")
 	print((pd.Series(y).value_counts()))
 	print ("\n")
 
@@ -87,7 +83,6 @@ def load_compas_data():
 		if attr in SENSITIVE_ATTRS:
 			x_control[attr] = vals
 
-
 		# add to learnable features
 		X = np.hstack((X, vals))
 
@@ -100,7 +95,6 @@ def load_compas_data():
 				for k in lb.classes_: # non-binary categorical features, need to add the names for each cat
 					feature_names.append(attr + "_" + str(k))
 
-
 	# convert the sensitive feature to 1-d array
 	x_control = dict(x_control)
 	for k in list(x_control.keys()):
@@ -109,7 +103,7 @@ def load_compas_data():
 
 	# sys.exit(1)
 
-	"""permute the date randomly"""
+	""" permute the date randomly """
 	perm = list(range(0,X.shape[0]))
 	shuffle(perm)
 	X = X[perm]
@@ -117,8 +111,7 @@ def load_compas_data():
 	for k in list(x_control.keys()):
 		x_control[k] = x_control[k][perm]
 
-
 	print(("Features we will be using for classification are:", feature_names, "\n"))
 
 
-	return X, y, x_control
+	return X, y, x_control, feature_names

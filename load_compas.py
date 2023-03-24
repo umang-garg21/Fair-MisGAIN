@@ -11,9 +11,8 @@ from random import seed, shuffle
     The adult dataset can be obtained from: https://raw.githubusercontent.com/propublica/compas-analysis/master/compas-scores-two-years.csv
     The code will look for the data file in the present directory, if it is not found, it will download them from GitHub.
 """
- 
-def load_compas_data():
-    
+
+def load_compas_data():  
 	SEED = 1234
 	seed(SEED)
 	np.random.seed(SEED)
@@ -22,7 +21,7 @@ def load_compas_data():
 	CONT_VARIABLES = ["priors_count"] # continuous features, will need to be handled separately from categorical features, categorical features will be encoded using one-hot
 	CLASS_FEATURE = "two_year_recid" # the decision variable
 	SENSITIVE_ATTRS = ["race"]
-
+	
 	# load the data and get some stats
 	df = pd.read_csv('data/compas-scores-two-years.csv')
 	df = df.dropna(subset=["days_b_screening_arrest"]) # dropping missing vals
@@ -54,7 +53,6 @@ def load_compas_data():
 		data[k] = data[k][idx]
 
 	""" Feature normalization and one hot encoding """
-
 	# convert class label 0 to -1
 	y = data[CLASS_FEATURE]
 	y[y==0] = -1
@@ -65,13 +63,13 @@ def load_compas_data():
 
 	X = np.array([]).reshape(len(y), 0) # empty array with num rows same as num examples, will hstack the features to it
 	x_control = defaultdict(list)
-
+	
 	feature_names = []
 	for attr in FEATURES_CLASSIFICATION:
 		vals = data[attr]
 		if attr in CONT_VARIABLES:
 			vals = [float(v) for v in vals]
-			vals = preprocessing.scale(vals) # 0 mean and 1 variance  
+			vals = preprocessing.scale(vals) # 0 mean and 1 variance
 			vals = np.reshape(vals, (len(y), -1)) # convert from 1-d arr to a 2-d arr with one col
 
 		else: # for binary categorical variables, the label binarizer uses just one var instead of two

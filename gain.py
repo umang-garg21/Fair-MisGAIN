@@ -34,14 +34,13 @@ from scipy.stats import chi2_contingency
 from utils import normalization, renormalization, rounding, digitizing
 from utils import xavier_init
 from utils import binary_sampler, uniform_sampler, sample_batch_index
-from utils import rmse_loss
+from utils import rmse_loss, ROC_Analysis
 
-
-def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[], binary_features=[], deep_analysis=False, bin_category_f= False, use_cont_f=True, use_cat_f=True):
-  '''Impute missing values in data_x
+def gain (train_ori_data_x, train_miss_data_x, val_ori_data_x, val_miss_data_x, test_ori_data_x, test_miss_data_x, gain_parameters, schedule, categorical_features=[], binary_features=[], sensitive_features = [], bins =[], deep_analysis=False, bin_category_f= False, use_cont_f=True, use_cat_f=True):
+  '''Impute missing values in train_miss_data_x
   
   Args:
-    - data_x: original data with missing values
+    - train_miss_data_x: original data with missing values
     - gain_parameters: GAIN network parameters:
       - batch_size: Batch size
       - hint_rate: Hint rate
@@ -53,41 +52,36 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
   '''
 
   # Define mask matrix
-  data_m = 1-np.isnan(data_x)
+  data_m_train = 1-np.isnan(train_miss_data_x)
+  data_m_test = 1-np.isnan(test_miss_data_x)
+  data_m_val = 1-np.isnan(val_miss_data_x)
   
   # System parameters
   batch_size = gain_parameters['batch_size']
   hint_rate = gain_parameters['hint_rate']
   alpha = gain_parameters['alpha']
   iterations = gain_parameters['iterations']
- 
+
   print("use_cat_f", use_cat_f)
   print("use_cont_f", use_cont_f)
 
  # Other parameters
-  no, dim = data_x.shape
+  no, dim = train_miss_data_x.shape
+
   # Hidden state dimensions
   h_dim = int(dim)
   G_sample_bin_correlation = []
 
-  # Normalization
-  norm_data, norm_parameters = normalization(data_x)
+  # Train data Normalization
+  norm_data, norm_parameters = normalization(train_miss_data_x)
   norm_data_x = np.nan_to_num(norm_data, 0)
-  
-  # Binning values for categorical features in the dataset 
-  bins =[]
-  if categorical_features:
-    for f in categorical_features:
-      temp = np.sort(np.unique(data_x[~np.isnan(data_x[:, f]), f]))
+  # Test data Normalization
+  norm_data_test, norm_parameters_test = normalization(test_miss_data_x)
+  norm_data_x_test = np.nan_to_num(norm_data_test, 0)
+  # Val data Normalization
+  norm_data_val, norm_parameters_val = normalization(val_miss_data_x)
+  norm_data_x_val = np.nan_to_num(norm_data_val, 0)
 
-      # Bin can be equally distributed as it is supposed to be OR exactly non nan values in data_x for now.
-      # a =  len(np.unique(temp))
-      # bins_f = np.arange(a)
-      # vector_norm = np.linalg.norm(bins_f)
-      # bins_f = bins_f/ vector_norm
-      # bins.append(bins_f)
-      bins.append(temp)
-      
   ## GAIN architecture
   # Input placeholders
   # Data vector
@@ -172,14 +166,13 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # Discriminator
     D_prob, D_W1 = discriminator(Hat_X, H) # Output is Hat_M
     # GAIN loss
-    
     D_loss_temp = -tf.reduce_mean(M * tf.log(D_prob + const1) \
                                   + (1-M) * tf.log(1. - D_prob + const1)) 
         
-    G_loss_temp = -tf.reduce_mean((1-M) * tf.log(D_prob + const1))
+    # G_loss_temp = -tf.reduce_mean((1-M) * tf.log(D_prob + const1))
     
-    # G_loss_temp = -tf.reduce_mean(M * tf.log(1 - D_prob + const1) \
-    #                              + (1-M) * tf.log(D_prob + const1))
+    G_loss_temp = -tf.reduce_mean(M * tf.log(1 - D_prob + const1) \
+                                  + (1-M) * tf.log(D_prob + const1))
 
     return G_sample, D_loss_temp, G_loss_temp, G_W1, D_W1
 
@@ -190,7 +183,7 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     G_sample_vecs = tf.unstack(G_sample, axis=1)
     G_sample_not_bin = tf.stack([ele for f, ele in enumerate(G_sample_vecs) if f not in binary_features], 1)
     MSE_loss_not_binary = tf.reduce_mean((M_non_bin * X_non_bin - M_non_bin * G_sample_not_bin)**2) / tf.reduce_mean(M_non_bin)
-
+    
     if not binary_features:
       G_sample_bin = []
       MSE_loss_binary = 0
@@ -209,30 +202,31 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     corr = df['ori_X_bin'].corr(df['G_sample_bin'])
     return corr
 
-  def calc_imputed_data():
-    ## Return imputed data  
-    Z_mb_temp = uniform_sampler(0, 0.01, no, dim)
-    M_mb_temp = data_m
-    X_mb_temp = norm_data_x
+  def calc_imputed_data(M_mb_temp, X_mb_temp, norm_data_temp, norm_params_temp, flag = 1):
+    ## Return imputed data
+    num, d = M_mb_temp.shape
+    ori_data_x_temp = X_mb_temp
+    Z_mb_temp = uniform_sampler(0, 0.01, num, d)
     X_mb_temp = M_mb_temp * X_mb_temp + (1-M_mb_temp) * Z_mb_temp
 
     # Run for 1 iteration, hence no further training.
     imputed_data = sess.run([G_sample], feed_dict = {X: X_mb_temp, M: M_mb_temp})[0]
-    imputed_data = data_m * norm_data_x + (1-data_m) * imputed_data
-
+    imputed_data = M_mb_temp * norm_data_temp + (1- M_mb_temp) * imputed_data
+  
     # Renormalization
-    imputed_data = renormalization(imputed_data, norm_parameters)
-
+    imputed_data = renormalization(imputed_data, norm_params_temp)
+    fpr ={}
+    tpr ={}
+    if flag == 1:
+      fpr, tpr = ROC_Analysis(imputed_data, ori_data_x_temp, bins, categorical_features, binary_features, sensitive_features)
     if bin_category_f:
-      # digitize data
-      # print("Binning categorical features")
-      imputed_data = digitizing(imputed_data, data_x, bins, categorical_features, binary_features)
+      imputed_data  = digitizing(imputed_data, norm_data_temp, bins, categorical_features, binary_features, 0.5)
     else:
       # Rounding
       # print("Rounding")
-      imputed_data = rounding(imputed_data, data_x, categorical_features)
+      imputed_data = rounding(imputed_data, X_mb_temp, categorical_features)
 
-    return imputed_data
+    return imputed_data, fpr, tpr
   
   print("categorical features", categorical_features)
   print("use_cont_f", use_cont_f)
@@ -323,7 +317,7 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     # Sample batch
     batch_idx = sample_batch_index(no, batch_size)
     X_mb = norm_data_x[batch_idx, :]
-    M_mb = data_m[batch_idx, :]
+    M_mb = data_m_train[batch_idx, :]
 
     # Sample random vectors
     Z_mb = uniform_sampler(0, 0.01, batch_size, dim)
@@ -335,9 +329,9 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
     H_mb = M_mb * H_mb_temp
     
     # Combine random vectors with observed vectors
-    X_mb = M_mb * X_mb + (1-M_mb) * Z_mb 
+    X_mb = M_mb * X_mb + (1-M_mb) * Z_mb
 
-    # print("X is:") 
+    # print("X is:")
     # tf.print(X)
     # print("M is:", M)
     # print ("G Sample is :", G_sample)  
@@ -347,41 +341,43 @@ def gain (ori_data_x, data_x, gain_parameters, schedule, categorical_features=[]
               feed_dict = {X: X_mb, M: M_mb, H: H_mb})
 
     # Sample random vectors
-    noise = uniform_sampler(0, 1, batch_size, dim)
+    # noise = uniform_sampler(0, 1, batch_size, dim)
 
-    _, D_loss_curr = sess.run([D_solver, D_loss_temp], 
-                            feed_dict = {M: M_mb, X: X_mb +(noise), H: H_mb})
+    _, D_loss_curr = sess.run([D_solver, D_loss_temp],
+                            feed_dict = {M: M_mb, X: X_mb, H: H_mb})
 
     ##################################################
     ######## Check RMSE after every iteration ########
     ##################################################
 
     if deep_analysis:
-      imputed_data_it = calc_imputed_data()
-      rmse_it[it], rmse_per_feature_it[it, :] = rmse_loss(ori_data_x, imputed_data_it, data_m)
+      flag = 0
+      imputed_data_it, fpr, tpr = calc_imputed_data(data_m_val, val_ori_data_x, norm_data_val, norm_parameters_val, flag)
+      rmse_it[it], rmse_per_feature_it[it, :] = rmse_loss(val_ori_data_x, imputed_data_it, data_m_val, categorical_features, binary_features)
       # print("MSE loss at iteration", it, ":", MSE_loss)
       # print("MSE loss current at iteration", it, ":", MSE_loss_curr)
     
       # Calculate binary correlations.
       for f in binary_features:
-        # print("Ori data binary", ori_data_x[:, f])
-        df = pd.DataFrame(ori_data_x[:, f] - imputed_data_it[:, f])
+        # print("Ori data binary", train_ori_data_x[:, f])
+        df = pd.DataFrame(val_ori_data_x[:, f] - imputed_data_it[:, f])
         pd.set_option('display.max_rows', None)
         # print("df", df)
-        print("Number of bad imputation entries:", np.count_nonzero(ori_data_x[:, f]-imputed_data_it[:,f]))
-        G_sample_bin_correlation.append(G_sample_bin_corr(ori_data_x[:,f], imputed_data_it[:,f]))
+        print("Number of bad imputation entries:", np.count_nonzero(val_ori_data_x[:, f]-imputed_data_it[:,f]))
+        G_sample_bin_correlation.append(G_sample_bin_corr(val_ori_data_x[:,f], imputed_data_it[:,f]))
 
     loss_list.append((D_loss_curr, MSE_loss_not_binary_curr, MSE_loss_binary_curr, MSE_loss_curr, G_loss_curr))
 
   ## Return imputed data
-  imputed_data = calc_imputed_data()
-  
+  flag = 1
+  imputed_data, fpr, tpr = calc_imputed_data(data_m_test, test_ori_data_x ,norm_data_test, norm_parameters_test, flag)
+
   import matplotlib.pyplot as plt
   x = np.arange(len(G_sample_bin_correlation))
   fig = plt.figure()
   plt.plot(x, G_sample_bin_correlation)
   
   if deep_analysis:
-    return imputed_data, loss_list, rmse_it, rmse_per_feature_it
+    return imputed_data, loss_list, rmse_it, rmse_per_feature_it, fpr, tpr
   else:
-    return imputed_data, loss_list
+    return imputed_data, loss_list, fpr, tpr

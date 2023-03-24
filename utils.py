@@ -34,10 +34,8 @@ tf.disable_v2_behavior()
 
 def normalization (data, parameters=None):
   '''Normalize data in [0, 1] range.
-
   Args:
     - data: original data
-  
   Returns
     - norm_data: normalized data
     - norm_parameters: min_val, max_val for each feature for renormalization
@@ -45,6 +43,7 @@ def normalization (data, parameters=None):
 
   # Parameters
   # print("data.shape:", data.shape)
+
   _, dim = data.shape
   norm_data = data.copy()
   
@@ -58,12 +57,14 @@ def normalization (data, parameters=None):
       min_val[i] = np.nanmin(norm_data[:, i])
       norm_data[:, i] = norm_data[:, i] - np.nanmin(norm_data[:, i])
       max_val[i] = np.nanmax(norm_data[:, i])
-      norm_data[:, i] = norm_data[:, i] / (np.nanmax(norm_data[:, i]) + 1e-6)  #in case nanmax returns nan or 0, add 1e-6
+      if max_val[i] is (np.nan or 0):
+        norm_data[:, i] = norm_data[:, i] / (np.nanmax(norm_data[:, i]) + 1e-8)  #in case nanmax returns nan or 0, add 1e-8
+      else:
+        norm_data[:, i] = norm_data[:, i] / (np.nanmax(norm_data[:, i]))  
       
     # Return norm_parameters for renormalization
     norm_parameters = {'min_val': min_val,
                        'max_val': max_val}
-
   else:
     min_val = parameters['min_val']
     max_val = parameters['max_val']
@@ -74,7 +75,7 @@ def normalization (data, parameters=None):
       norm_data[:,i] = norm_data[:,i] / (max_val[i] + 1e-6)  
       
     norm_parameters = parameters
-      
+ 
   return norm_data, norm_parameters
 
 
@@ -132,26 +133,40 @@ def rounding (imputed_data, data_x, categorical_features =[]):
   return rounded_data
 
 
-def digitizing (imputed_data, data_x, bins, categorical_features =[], binary_features=[]):
+def digitizing (imputed_data, data_x, bins, categorical_features =[], binary_features=[], t =0.5):
   '''
   Args:
     - imputed_data: imputed data
     - data_x: original data with missing values
-    
+    - categorical features (index-based): list of categorical features in the feature list
+    - binary features (index-based): list of binary features in the feature list
+    - t: threshold value
+
   Returns:
     - rounded_data: rounded imputed data
   '''
-  _, dim = data_x.shape
+  rows, dim = data_x.shape
   dig_data = imputed_data.copy()
-
+  indices = np.zeros(data_x.shape)
+ 
   for i, f in enumerate(categorical_features):
-    # print("dig data", dig_data[:, f])
     if f not in binary_features:
-      dig_data[:, f] = np.digitize(dig_data[:, f], bins[i])
-      temp, norm_p = normalization(np.expand_dims(dig_data[:, f], axis=-1))
-      dig_data[:, f] = np.squeeze(temp)
-    else:
-      dig_data[:, f] = np.round(dig_data[:, f])
+      # print("dig data", dig_data[:, f])
+      # print("bins[", i, "]", bins[i])
+      temp = list(np.digitize(dig_data[:, f], bins[i]))
+      for r in range(rows):
+        # print(temp[r]- 1)
+        dig_data[r, f] = bins[i][temp[r] - 1]  # It is one-based index coding
+
+  for i, f in enumerate(binary_features):
+    # print("Rounding Binary feature: ", f)
+    # print("Unique values of digital data before digitization", np.unique(dig_data[:, f]))
+    # print(np.unique(dig_data[:, f]))
+    dig_data[:, f] = np.where(dig_data[:, f] > t, 1, 0)
+    # dig_data[:, f] = (dig_data[:, f] > t)*1
+    # print("non zero count in original data", np.count_nonzero(data_x[:, f]))
+    # print("non zero count in digitized data", np.count_nonzero(dig_data[:, f]))
+    # print("Unique values of digital data after digitization", np.unique(dig_data[:, f]))
 
   for i, f in enumerate(categorical_features):
     # print("Unq original data for feature", f, ":", np.unique(data_x[:,f]))
@@ -162,7 +177,7 @@ def digitizing (imputed_data, data_x, bins, categorical_features =[], binary_fea
   return dig_data
 
 
-def rmse_loss (ori_data, imputed_data, data_m):
+def rmse_loss (ori_data, imputed_data, data_m, categorical_features=[], binary_features=[]):
   
   '''Compute RMSE loss between ori_data and imputed_data
   
@@ -174,10 +189,10 @@ def rmse_loss (ori_data, imputed_data, data_m):
   Returns:
     - rmse: Root Mean Squared Error
   '''
-  # Normalize to same base min and max values to get correct MSE, RMSE
+
+  no, dim = ori_data.shape
   ori_data, norm_parameters = normalization(ori_data)
   imputed_data, _ = normalization(imputed_data, norm_parameters)
-  
   # print(ori_data, imputed_data)
   # Only for missing values
 
@@ -190,14 +205,21 @@ def rmse_loss (ori_data, imputed_data, data_m):
   # Calculate RMSE per feature
   _, dim = ori_data.shape
 
+  const1 = 1e-8
   rmse_per_feature = []
-  for i in range(dim):    
-    nominator = np.sum(((1-data_m[:, i]) * ori_data[:, i] - (1-data_m[:, i]) * imputed_data[:, i])**2)  #1-data_m is 1 only when data_m is 0: imputed data
-    denominator = np.sum(1-data_m[:, i])
-    rmse_per_feature.append(np.sqrt(nominator/float(denominator)))
+  for i in range(dim):
+    if i in binary_features:
+      nominator = -np.sum((1-data_m[:, i])*ori_data[:, i] * np.log((1-data_m[:, i])*imputed_data[:, i]+const1) \
+                          + (1-data_m[:, i])*(1-ori_data[:, i]) * np.log((1-data_m[:, i])*(1-imputed_data[:, i])+const1))
+      denominator = -np.sum((1-data_m[:, i])*2*np.log(const1))
+      # print("nominator, denominator for binary feature", i,": ", nominator, denominator)
+      rmse_per_feature.append(nominator/float(denominator))
+    else:
+      nominator = np.sum(((1-data_m[:, i]) * ori_data[:, i] - (1-data_m[:, i]) * imputed_data[:, i])**2)  #1-data_m is 1 only when data_m is 0: imputed data
+      denominator = np.sum(1-data_m[:, i])
+      rmse_per_feature.append(np.sqrt(nominator/float(denominator)))
 
   return rmse, rmse_per_feature
-
 
 def xavier_init(size):
   '''Xavier initialization.
@@ -212,7 +234,6 @@ def xavier_init(size):
   print("in_dim", in_dim)
   xavier_stddev = 1. / tf.sqrt(int(in_dim) / 2.)
   return tf.random_normal(shape = size, stddev = xavier_stddev)
-      
 
 def binary_sampler(p, rows, cols):
   '''Sample binary random variables.
@@ -259,3 +280,36 @@ def sample_batch_index(total, batch_size):
   batch_idx = total_idx[:batch_size]
   return batch_idx
   
+def ROC_Analysis(imputed_data_x, ori_data_x, bins, categorical_features, binary_features, sensitive_features = []):
+  fpr = {}
+  tpr = {}
+  no, dim = ori_data_x.shape
+  num = 10
+  binary_threshold = [i/ num for i in range(num+1)]
+
+  for f in binary_features:
+    x1 = []
+    x2 = []
+    if f not in sensitive_features:
+      for t in binary_threshold:
+        # print("threshold", t)
+        imputed_data_x_dig = digitizing(imputed_data_x, ori_data_x, bins, categorical_features, binary_features, t)
+        # print("Number of bad imputation entries:", np.count_nonzero(ori_data_x[:, f]- imputed_data_x_dig[:, f]))
+        tp = tn = fp = fn = 0
+        for i in range(no):
+          if ori_data_x[i][f] == 0: # Output label is 0
+            if imputed_data_x_dig[i][f] == 0: # negative outcome for the selected binary feature
+              tn += 1
+            else:
+              fp += 1
+          if ori_data_x[i][f] == 1: # Output label is 1
+            if imputed_data_x_dig[i][f] == 0: # negative outcome for the selected binary feature
+              fn += 1
+            else:
+              tp += 1
+        x1.append(fp/float(fp + tn))  # FPR  
+        x2.append(tp/float(tp + fn))  # TPR         
+      fpr[f] = x1
+      tpr[f] = x2
+
+  return fpr, tpr
